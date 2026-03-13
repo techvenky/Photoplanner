@@ -16,6 +16,38 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 const { minify } = require('terser');
+const pc     = require('picocolors');
+
+// ─── HTML template → DOM element mapping (source files → generated tpl-*.js) ──
+// Edit HTML in templates/*.html — build auto-generates js/templates/tpl-*.js
+const TEMPLATE_MAP = [
+  { src: 'templates/planner.html',     id: 'tab-planner',     out: 'js/templates/tpl-planner.js'     },
+  { src: 'templates/sunmoon.html',     id: 'tab-sunmoon',     out: 'js/templates/tpl-sunmoon.js'     },
+  { src: 'templates/milkyway.html',    id: 'tab-milkyway',    out: 'js/templates/tpl-milkyway.js'    },
+  { src: 'templates/calculators.html', id: 'tab-calculators', out: 'js/templates/tpl-calculators.js' },
+  { src: 'templates/modals.html',      id: 'modals-root',     out: 'js/templates/tpl-modals.js'      },
+];
+
+function compileTemplates() {
+  const outDir = path.join(__dirname, 'js', 'templates');
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  for (const { src, id, out } of TEMPLATE_MAP) {
+    const srcPath = path.join(__dirname, src);
+    const outPath = path.join(__dirname, out);
+    if (!fs.existsSync(srcPath)) {
+      console.error(pc.red(`  MISSING template: ${src}`));
+      process.exit(1);
+    }
+    // Escape backticks and template-literal interpolation markers in raw HTML
+    const html = fs.readFileSync(srcPath, 'utf8')
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$\{/g, '\\${');
+    const js = `// AUTO-GENERATED — edit ${src}, not this file\ndocument.getElementById('${id}').innerHTML = \`${html}\`;\n`;
+    fs.writeFileSync(outPath, js, 'utf8');
+    console.log(pc.dim(`  ${src} → ${out}`));
+  }
+}
 
 // ─── JS load order (must match the <script> order in index.html) ──────────────
 const JS_FILES = [
@@ -39,6 +71,9 @@ const JS_FILES = [
   'js/sunpath.js',
   'js/sunmoon.js',
   'js/milkyway.js',
+  'js/favorites.js',
+  'js/weather.js',
+  'js/ar.js',
   'js/location.js',
   'js/datetime.js',
   'js/finder.js',
@@ -88,23 +123,27 @@ async function build() {
   const outDir = path.join(__dirname, 'dist');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
 
+  // ── 0. Compile HTML templates → js/templates/tpl-*.js ─────────────────────
+  console.log(pc.cyan('Compiling HTML templates...'));
+  compileTemplates();
+
   // ── 1. Concatenate + minify JS ─────────────────────────────────────────────
-  console.log('Concatenating JS files...');
+  console.log(pc.cyan('\nConcatenating JS files...'));
   const codeMap = {};
   for (const file of JS_FILES) {
     const abs = path.join(__dirname, file);
     if (!fs.existsSync(abs)) {
-      console.error(`  MISSING: ${file}`);
+      console.error(pc.red(`  MISSING: ${file}`));
       process.exit(1);
     }
     codeMap[file] = fs.readFileSync(abs, 'utf8');
-    console.log(`  + ${file}`);
+    console.log(pc.dim(`  + ${file}`));
   }
 
-  console.log('\nMinifying JS...');
+  console.log(pc.cyan('\nMinifying JS...'));
   const result = await minify(codeMap, TERSER_OPTIONS);
   if (result.error) {
-    console.error('Terser error:', result.error);
+    console.error(pc.red('Terser error:'), result.error);
     process.exit(1);
   }
 
@@ -119,7 +158,7 @@ async function build() {
   const jsHash    = contentHash(result.code);
 
   // ── 2. Minify CSS ──────────────────────────────────────────────────────────
-  console.log('\nMinifying CSS...');
+  console.log(pc.cyan('\nMinifying CSS...'));
   const cssSource  = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   const cssMin     = minifyCSS(cssSource);
   fs.writeFileSync(path.join(outDir, 'style.min.css'), cssMin, 'utf8');
@@ -146,10 +185,10 @@ async function build() {
   fs.writeFileSync(htmlPath, html, 'utf8');
 
   // ── 4. Summary ─────────────────────────────────────────────────────────────
-  console.log('\nDone!');
-  console.log(`  JS  : ${origJsKb.toFixed(1)} KB → ${minJsKb.toFixed(1)} KB  (${jsSavings}% smaller)  [?v=${jsHash}]`);
-  console.log(`  CSS : ${origCssKb.toFixed(1)} KB → ${minCssKb.toFixed(1)} KB  (${cssSavings}% smaller)  [?v=${cssHash}]`);
-  console.log(`  index.html cache refs updated`);
+  console.log(pc.green('\n✔ Build complete!'));
+  console.log(`  ${pc.yellow('JS')}  : ${origJsKb.toFixed(1)} KB → ${pc.green(minJsKb.toFixed(1) + ' KB')}  (${pc.cyan(jsSavings + '% smaller')})  ${pc.dim('[?v=' + jsHash + ']')}`);
+  console.log(`  ${pc.yellow('CSS')} : ${origCssKb.toFixed(1)} KB → ${pc.green(minCssKb.toFixed(1) + ' KB')}  (${pc.cyan(cssSavings + '% smaller')})  ${pc.dim('[?v=' + cssHash + ']')}`);
+  console.log(`  ${pc.dim('index.html cache refs updated')}`);
 }
 
 // Run directly or export for the dev server

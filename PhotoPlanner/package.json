@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
-    "dev": "node dev.js"
+    "dev": "node dev.js",
+    "icons": "node generate-icons.js"
   },
   "devDependencies": {
+    "picocolors": "^1.1.1",
     "terser": "^5.46.0"
   }
 }

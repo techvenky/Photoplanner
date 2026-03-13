@@ -1,0 +1,8 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# Generated files — edit templates/*.html, not these
+js/templates/

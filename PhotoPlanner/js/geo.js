@@ -34,17 +34,15 @@ function findAlignments(bearing, date) {
     const d = new Date(date);
     d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
     const sunPos  = SunCalc.getPosition(d, state.currentLat, state.currentLon);
-    const sunAz   = ((sunPos.azimuth + Math.PI) * 180 / Math.PI + 360) % 360;
-    const angDiff = Math.abs(((sunAz - bearing + 180 + 360) % 360) - 180);
-    if (angDiff < tol && sunPos.altitude > 0) {
+    const sunAz = ((sunPos.azimuth + Math.PI) * 180 / Math.PI + 360) % 360;
+    if (circularAzDiff(sunAz, bearing) < tol && sunPos.altitude > 0) {
       if (!results.find(r => r.type === 'Sun' && Math.abs(r.h - h) < 0.5)) {
         results.push({ type: 'Sun', time: d, az: sunAz, alt: toDeg(sunPos.altitude), h });
       }
     }
     const moonPos = SunCalc.getMoonPosition(d, state.currentLat, state.currentLon);
-    const moonAz  = ((moonPos.azimuth + Math.PI) * 180 / Math.PI + 360) % 360;
-    const mDiff   = Math.abs(((moonAz - bearing + 180 + 360) % 360) - 180);
-    if (mDiff < tol && moonPos.altitude > 0) {
+    const moonAz = ((moonPos.azimuth + Math.PI) * 180 / Math.PI + 360) % 360;
+    if (circularAzDiff(moonAz, bearing) < tol && moonPos.altitude > 0) {
       if (!results.find(r => r.type === 'Moon' && Math.abs(r.h - h) < 0.5)) {
         results.push({ type: 'Moon', time: d, az: moonAz, alt: toDeg(moonPos.altitude), h });
       }

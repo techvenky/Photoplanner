@@ -3,9 +3,27 @@
 function fmtTime(date) {
   if (!date || isNaN(date)) return '—';
   if (typeof dayjs !== 'undefined' && state.selectedTimezone) {
-    try { return dayjs(date).tz(state.selectedTimezone).format('h:mm A'); } catch(e) {}
+    try { return dayjs(date).tz(state.selectedTimezone).format('h:mm A'); } catch(e) {
+      console.warn('fmtTime: timezone conversion failed', e);
+    }
   }
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Moon phase emoji shared across Sun & Moon tab and Alignment Finder
+function moonPhaseEmoji(phase) {
+  return ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'][Math.round(phase * 8) % 8];
+}
+
+// Moon apparent diameter in metres at a given shooting distance
+// Angular diameter ~0.5177°, half-angle ~0.004515 rad
+function moonApparentSizeM(distKm) {
+  return distKm * 1000 * 2 * Math.tan(0.004515);
+}
+
+// Smallest angular difference between two compass bearings (0–180°)
+function circularAzDiff(a, b) {
+  return Math.abs(((a - b + 180 + 360) % 360) - 180);
 }
 
 function fmtDuration(ms) {

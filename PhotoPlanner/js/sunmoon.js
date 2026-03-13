@@ -44,10 +44,9 @@ function updateSunMoon() {
   // Moon phase
   const phase = moonIllum.phase;
   const phaseNames = ['New Moon','Waxing Crescent','First Quarter','Waxing Gibbous','Full Moon','Waning Gibbous','Last Quarter','Waning Crescent'];
-  const phaseEmojis = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
   const phaseIdx = Math.round(phase * 8) % 8;
   document.getElementById('moon-phase').textContent = phaseNames[phaseIdx];
-  document.getElementById('moon-visual').textContent = phaseEmojis[phaseIdx];
+  document.getElementById('moon-visual').textContent = moonPhaseEmoji(phase);
   document.getElementById('moon-illum').textContent = (moonIllum.fraction * 100).toFixed(1) + '%';
 
   // Moon age (days since new moon)

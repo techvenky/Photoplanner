@@ -11,14 +11,20 @@ function setLocation(lat, lon, label) {
   const locStr = label || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   document.getElementById('sm-location-label').textContent = locStr;
   document.getElementById('mw-location-label').textContent = locStr;
+  const searchEl = document.getElementById('location-search');
+  if (searchEl) searchEl.value = locStr;
 
   invalidateTlCache(); // invalidate altitude cache for new location
   drawSunPath();
   updateSunMoon();
   updateMilkyWay();
 
-  // Auto-detect local timezone for the new location
+  // Enable the Save Location button now that a location is set
+  updateSaveBtnState();
+
+  // Auto-detect local timezone + fetch weather for the new location
   autoDetectTimezone(lat, lon);
+  fetchWeather(lat, lon);
 
   // Show timeline overlay when location is first set
   const overlay = document.getElementById('timeline-overlay');
@@ -103,7 +109,7 @@ async function autoDetectTimezone(lat, lon) {
         const absM   = Math.abs(offset) % 60;
         const offStr = `UTC${sign}${absH}${absM ? ':' + String(absM).padStart(2,'0') : ''}`;
         document.getElementById('tz-offset-label').textContent = `${offStr} · auto-detected`;
-      } catch(_) {}
+      } catch(e) { console.warn('autoDetectTimezone: offset formatting failed', e); }
     }
 
     // Refresh all time displays with the detected timezone
@@ -111,8 +117,9 @@ async function autoDetectTimezone(lat, lon) {
     updateMilkyWay();
     const tlOverlay = document.getElementById('timeline-overlay');
     if (tlOverlay && !tlOverlay.classList.contains('collapsed')) drawTimelineOverlay(false);
-  } catch(_) {
-    // API unavailable — browser local timezone is already active (reset above)
+  } catch(e) {
+    console.warn('autoDetectTimezone: API unavailable, using browser local timezone', e);
+    // Browser local timezone is already active (reset above)
   }
 }
 

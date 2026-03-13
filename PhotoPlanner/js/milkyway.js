@@ -5,10 +5,13 @@ function updateMilkyWay() {
   if (!dateStr) return;
   const date = new Date(dateStr + 'T12:00:00');
 
-  // Month badges
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const goodMonths = [2,3,4,5,6,7,8,9]; // Mar-Oct indices
-  const bestMonths = [4,5,6,7,8]; // May-Sep
+  // Month badges — hemisphere-aware
+  // Northern (lat ≥ 0): best May–Sep, good Mar–Oct
+  // Southern (lat < 0): galactic center is higher; best Apr–Sep, good Feb–Oct
+  const isNorthern = state.currentLat === null || state.currentLat >= 0;
+  const months     = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const goodMonths = isNorthern ? [2,3,4,5,6,7,8,9] : [1,2,3,4,5,6,7,8,9]; // Mar–Oct / Feb–Oct
+  const bestMonths = isNorthern ? [4,5,6,7,8]       : [3,4,5,6,7,8];       // May–Sep / Apr–Sep
   const container = document.getElementById('mw-months');
   container.innerHTML = months.map((m, i) => {
     let cls = '';
@@ -16,6 +19,9 @@ function updateMilkyWay() {
     else if (goodMonths.includes(i)) cls = 'good';
     return `<span class="month-badge ${cls}">${m}</span>`;
   }).join('');
+  // Show hemisphere label below badges
+  const hemiLabel = document.getElementById('mw-hemisphere-label');
+  if (hemiLabel) hemiLabel.textContent = isNorthern ? '🌍 Northern Hemisphere' : '🌏 Southern Hemisphere';
 
   if (state.currentLat === null) return;
 
@@ -48,7 +54,8 @@ function updateMilkyWay() {
   // Galactic center rise/set scan during astronomical night
   const month = date.getMonth() + 1;
   const galacticVisible = state.currentLat > -60 && state.currentLat < 85;
-  const galacticBestMonths = month >= 4 && month <= 10;
+  const galacticBestMonths = isNorthern ? (month >= 4 && month <= 10)
+                                        : (month >= 2 && month <= 10);
 
   // Scan every 4 minutes across the 24-hour window to find GC altitude crossings
   let gcRise = null, gcSet = null;
@@ -93,8 +100,9 @@ function updateMilkyWay() {
     <div class="time-row"><span>Recommended</span><span>${gcVisible && galacticBestMonths && moonIllum.fraction < 0.3 ? '🌟 Go shoot!' : 'Plan for better conditions'}</span></div>
   `;
 
-  // Next best dates (next 4 new moons)
-  const goodMWMonths = [4, 5, 6, 7, 8, 9, 10]; // Apr–Oct
+  // Next best dates (next 4 new moons) — hemisphere-aware
+  const goodMWMonths = isNorthern ? [4, 5, 6, 7, 8, 9, 10]    // Apr–Oct
+                                  : [2, 3, 4, 5, 6, 7, 8, 9, 10]; // Feb–Oct
   const nextMoons = nextNewMoons(date, 4);
   const mwDatesHTML = nextMoons.map(d => {
     const inSeason = goodMWMonths.includes(d.getMonth() + 1);
@@ -105,6 +113,7 @@ function updateMilkyWay() {
     return `<div class="time-row" style="gap:0.5rem"><span>🌑 ${dateStrFmt}</span>${badge}</div>`;
   }).join('');
   document.getElementById('mw-next-dates').innerHTML = mwDatesHTML;
+  _updateMilkyWayWeather();
 }
 
 function initMilkyWayListeners() {

@@ -129,6 +129,8 @@ function initMap() {
   initCalcTabs();
   initSkyModal();
   initLocationControls();
+  initFavorites();
+  initAR();
   initTargetControls({
     onTargetCleared: () => drawSkyDomeIfOpen()
   });

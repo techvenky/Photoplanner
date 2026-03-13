@@ -1057,6 +1057,46 @@ button:hover { background: #2ea043; }
 .finder-badge-astro    { background: #1a1a2a; color: #6e7681; border: 1px solid #30363d; }
 .finder-badge-night    { background: #0d1117; color: #484f58; border: 1px solid #30363d; }
 
+/* Filter chips + action buttons toolbar */
+.finder-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.5rem 0.75rem 0.35rem;
+  border-bottom: 1px solid #30363d;
+}
+.finder-filter-chip {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: #8b949e;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.finder-filter-chip.active {
+  background: #1f6feb33;
+  color: #58a6ff;
+  border-color: #1f6feb;
+}
+.finder-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+.finder-actions .btn { font-size: 0.7rem; padding: 0.15rem 0.5rem; }
+
+/* Quality score column */
+.finder-score {
+  font-size: 0.65rem;
+  letter-spacing: -0.5px;
+  color: #e3b341;
+  white-space: nowrap;
+}
+
 /* ── Mobile-only elements (hidden on desktop) ─────────────────────────────── */
 .sidebar-drag-handle  { display: none; }
 .mobile-map-fab       { display: none; }
@@ -1225,3 +1265,141 @@ button:hover { background: #2ea043; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #161b22; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* ── Planner weather bar ─────────────────────────────────────────────────── */
+.planner-weather-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.weather-chip {
+  font-size: 0.72rem;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 0.15rem 0.55rem;
+  color: #8b949e;
+  white-space: nowrap;
+}
+
+/* ── AR View ──────────────────────────────────────────────────────────────── */
+.ar-btn {
+  background: #0d2b1a;
+  border: 1px solid #238636;
+  color: #3fb950;
+}
+.ar-btn:hover { background: #238636; color: #fff; }
+
+/* Full-screen AR overlay */
+.ar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: none;
+  background: #000;
+  overflow: hidden;
+}
+.ar-overlay.active { display: block; }
+
+/* Live camera feed — fills the screen */
+.ar-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Canvas layer on top of the video */
+.ar-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Top HUD bar */
+.ar-hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 1rem;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  gap: 0.75rem;
+  z-index: 10;
+}
+
+.ar-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #f0f6fc;
+  white-space: nowrap;
+}
+
+.ar-status {
+  font-size: 0.82rem;
+  color: #3fb950;
+  font-family: monospace;
+  flex: 1;
+  text-align: center;
+}
+
+.ar-close {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+}
+
+/* Bottom FOV control strip */
+.ar-hud-bottom-controls {
+  position: absolute;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  border-radius: 20px;
+  padding: 0.4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.ar-fov-label-txt {
+  font-size: 0.75rem;
+  color: #8b949e;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ar-fov-slider {
+  width: 120px;
+  accent-color: #3fb950;
+  cursor: pointer;
+}
+
+/* Help tip at bottom */
+.ar-tip {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  color: #8b949e;
+  font-size: 0.72rem;
+  text-align: center;
+  padding: 0.4rem 1rem;
+  border-radius: 8px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}

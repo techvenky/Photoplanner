@@ -1,9 +1,15 @@
 // ─── Sun/Moon Path on Map ─────────────────────────────────────────────────────
 
 // SunCalc azimuth: radians from south, positive westward.
-// lat/lon offset: lat -= cos(az)*R,  lon -= sin(az)*R
+// lat/lon offset: lat -= cos(az)*R,  lon -= sin(az)*R / cos(lat)
+// The longitude divisor corrects for Mercator scaling — without it east/west
+// directions are visually stretched, misplacing markers at higher latitudes.
 function azToLatLon(az, r) {
-  return [state.currentLat - r * Math.cos(az), state.currentLon - r * Math.sin(az)];
+  const lonScale = Math.cos(state.currentLat * Math.PI / 180);
+  return [
+    state.currentLat - r * Math.cos(az),
+    state.currentLon - r * Math.sin(az) / lonScale,
+  ];
 }
 
 function getDateAtMinutes(minutes) {
@@ -25,17 +31,24 @@ function drawSunPath() {
   const R = 1.5; // arc radius in degrees
 
   if (document.getElementById('show-sun').checked) {
-    // Full-day arc
-    const sunPoints = [];
+    // Full-day arc — split into separate segments so a below-horizon gap never
+    // creates a false line connecting two unrelated above-horizon positions.
+    const sunSegs = [[]];
     for (let h = 0; h <= 24; h += 0.1) {
       const d = new Date(date);
       d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
       const pos = SunCalc.getPosition(d, state.currentLat, state.currentLon);
-      if (pos.altitude > 0) sunPoints.push(azToLatLon(pos.azimuth, R));
+      const last = sunSegs[sunSegs.length - 1];
+      if (pos.altitude > 0) {
+        last.push(azToLatLon(pos.azimuth, R));
+      } else if (last.length > 0) {
+        sunSegs.push([]);
+      }
     }
-    if (sunPoints.length > 1) {
-      addStrokedPolyline(sunPoints, { color: '#e3b341', weight: 2.5, opacity: 0.85 }, state.sunPathGroup);
-    }
+    sunSegs.forEach(seg => {
+      if (seg.length > 1)
+        addStrokedPolyline(seg, { color: '#e3b341', weight: 2.5, opacity: 0.85 }, state.sunPathGroup);
+    });
 
     // Key-time markers + dashed direction lines
     if (document.getElementById('show-golden').checked) {
@@ -58,23 +71,30 @@ function drawSunPath() {
         }).addTo(state.keyTimesGroup);
         // Dot on arc
         L.circleMarker(pt, { color, fillColor: color, fillOpacity: 1, radius: 5, weight: 2 })
-          .bindTooltip(`${label}: ${fmtTimeLocal(t)}`, { sticky: true })
+          .bindTooltip(`${label}: ${fmtTime(t)}`, { sticky: true })
           .addTo(state.keyTimesGroup);
       });
     }
   }
 
   if (document.getElementById('show-moon').checked) {
-    const moonPoints = [];
-    for (let h = 0; h <= 24; h += 0.25) {
+    // Split into segments so a set→rise gap never creates a false connecting line.
+    const moonSegs = [[]];
+    for (let h = 0; h <= 24; h += 0.1) {
       const d = new Date(date);
       d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
       const pos = SunCalc.getMoonPosition(d, state.currentLat, state.currentLon);
-      if (pos.altitude > 0) moonPoints.push(azToLatLon(pos.azimuth, R * 0.75));
+      const last = moonSegs[moonSegs.length - 1];
+      if (pos.altitude > 0) {
+        last.push(azToLatLon(pos.azimuth, R));
+      } else if (last.length > 0) {
+        moonSegs.push([]);
+      }
     }
-    if (moonPoints.length > 1) {
-      addStrokedPolyline(moonPoints, { color: '#a8d8ea', weight: 2, opacity: 0.8, dashArray: '6 4' }, state.moonPathGroup);
-    }
+    moonSegs.forEach(seg => {
+      if (seg.length > 1)
+        addStrokedPolyline(seg, { color: '#a8d8ea', weight: 2, opacity: 0.8, dashArray: '6 4' }, state.moonPathGroup);
+    });
   }
 
   // Milky Way galactic centre arc (visible during astronomical night)
@@ -122,7 +142,7 @@ function drawSunPath() {
         iconAnchor: [18, 18]
       });
       L.marker(gcPeak.pt, { icon: gcIcon })
-        .bindTooltip(`🌌 Galactic Core Peak<br>Alt: ${gcPeak.alt.toFixed(1)}°  Az: ${gcPeak.az.toFixed(1)}°<br>${fmtTimeLocal(gcPeak.time)}`, { sticky: true })
+        .bindTooltip(`🌌 Galactic Core Peak<br>Alt: ${gcPeak.alt.toFixed(1)}°  Az: ${gcPeak.az.toFixed(1)}°<br>${fmtTime(gcPeak.time)}`, { sticky: true })
         .addTo(state.milkyWayGroup);
     }
 
@@ -133,22 +153,13 @@ function drawSunPath() {
       if (mwPos.altitude > 0) {
         const pt = azToLatLon(mwPos.azimuth, R);
         L.circleMarker(pt, { color: '#c678dd', fillColor: '#c678dd', fillOpacity: 0.8, radius: 5, weight: 1.5 })
-          .bindTooltip(`🌌 ${idx === 0 ? 'Astro Night Start' : 'Astro Night End'}: ${fmtTimeLocal(t)}`)
+          .bindTooltip(`🌌 ${idx === 0 ? 'Astro Night Start' : 'Astro Night End'}: ${fmtTime(t)}`)
           .addTo(state.milkyWayGroup);
       }
     });
   }
 
   drawTimeIndicator();
-}
-
-// Local helper to avoid circular import — uses state.selectedTimezone same as fmtTime
-function fmtTimeLocal(date) {
-  if (!date || isNaN(date)) return '—';
-  if (typeof dayjs !== 'undefined' && state.selectedTimezone) {
-    try { return dayjs(date).tz(state.selectedTimezone).format('h:mm A'); } catch(e) {}
-  }
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 // Draws the moving direction ray + position marker at the selected time.
@@ -253,11 +264,11 @@ function updatePlannerInfo(dt) {
     <div class="info-row"><span class="info-label">🌕 Moon Az</span><span class="info-val">${moonAzDeg.toFixed(1)}°</span></div>
     <div class="info-row"><span class="info-label">🌕 Moon Alt</span><span class="info-val">${toDeg(moonPos.altitude).toFixed(1)}°</span></div>
     <hr style="border-color:#30363d;margin:0.4rem 0"/>
-    <div class="info-row"><span class="info-label">Sunrise</span><span class="info-val">${fmtTimeLocal(times.sunrise)}</span></div>
-    <div class="info-row"><span class="info-label">Sunset</span><span class="info-val">${fmtTimeLocal(times.sunset)}</span></div>
-    <div class="info-row"><span class="info-label">Golden AM</span><span class="info-val">${fmtTimeLocal(times.goldenHourEnd)}</span></div>
-    <div class="info-row"><span class="info-label">Golden PM</span><span class="info-val">${fmtTimeLocal(times.goldenHour)}</span></div>
-    <div class="info-row"><span class="info-label">Moonrise</span><span class="info-val">${moonTimes.rise ? fmtTimeLocal(moonTimes.rise) : '—'}</span></div>
-    <div class="info-row"><span class="info-label">Moonset</span><span class="info-val">${moonTimes.set ? fmtTimeLocal(moonTimes.set) : '—'}</span></div>
+    <div class="info-row"><span class="info-label">Sunrise</span><span class="info-val">${fmtTime(times.sunrise)}</span></div>
+    <div class="info-row"><span class="info-label">Sunset</span><span class="info-val">${fmtTime(times.sunset)}</span></div>
+    <div class="info-row"><span class="info-label">Golden AM</span><span class="info-val">${fmtTime(times.goldenHourEnd)}</span></div>
+    <div class="info-row"><span class="info-label">Golden PM</span><span class="info-val">${fmtTime(times.goldenHour)}</span></div>
+    <div class="info-row"><span class="info-label">Moonrise</span><span class="info-val">${moonTimes.rise ? fmtTime(moonTimes.rise) : '—'}</span></div>
+    <div class="info-row"><span class="info-label">Moonset</span><span class="info-val">${moonTimes.set ? fmtTime(moonTimes.set) : '—'}</span></div>
   `;
 }

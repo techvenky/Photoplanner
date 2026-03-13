@@ -8,9 +8,11 @@
 // Usage:   node dev.js
 //           npm run dev
 
-const http = require('http');
-const fs   = require('fs');
-const path = require('path');
+const http  = require('http');
+const fs    = require('fs');
+const path  = require('path');
+const cp    = require('child_process');
+const pc    = require('picocolors');
 
 const { build } = require('./build');
 
@@ -49,6 +51,14 @@ const LIVE_RELOAD_SCRIPT = `
 })();
 </script>`;
 
+// ─── Auto-open browser (cross-platform) ──────────────────────────────────────
+function openBrowser(url) {
+  const cmd = process.platform === 'win32' ? `start "" "${url}"`
+            : process.platform === 'darwin' ? `open "${url}"`
+            : `xdg-open "${url}"`;
+  cp.exec(cmd, err => { if (err) console.warn(pc.yellow('[dev] Could not auto-open browser:', err.message)); });
+}
+
 // ─── Rebuild helper ───────────────────────────────────────────────────────────
 async function rebuild() {
   if (building) return;
@@ -57,9 +67,9 @@ async function rebuild() {
   try {
     await build();
     buildVersion++;
-    console.log(`[dev] Built in ${Date.now() - t} ms  (v${buildVersion})`);
+    console.log(pc.green(`[dev] Built in ${Date.now() - t} ms`) + pc.dim(`  (v${buildVersion})`));
   } catch (e) {
-    console.error('[dev] Build error:', e.message);
+    console.error(pc.red('[dev] Build error:'), e.message);
   } finally {
     building = false;
   }
@@ -69,10 +79,10 @@ async function rebuild() {
 function watch(target, label) {
   try {
     fs.watch(target, { recursive: true }, (_evt, filename) => {
-      if (!filename || !/\.(js|css)$/.test(filename)) return;
+      if (!filename || !/\.(js|css|html)$/.test(filename)) return;
       // Ignore changes inside dist/ — those are our own build outputs
       if (filename.startsWith('dist')) return;
-      console.log(`[dev] Changed: ${label ? label + '/' : ''}${filename}`);
+      console.log(pc.cyan('[dev] Changed:'), pc.yellow(`${label ? label + '/' : ''}${filename}`));
       rebuild();
     });
   } catch {
@@ -120,17 +130,20 @@ const server = http.createServer((req, res) => {
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-console.log('\nPhotoPlanner dev server — building...\n');
+console.log(pc.bold('\nPhotoPlanner dev server — building...\n'));
 
 rebuild().then(() => {
-  // Watch js/ directory and the root (catches style.css changes)
+  // Watch js/, templates/ and the root (catches style.css changes)
   watch(path.join(ROOT, 'js'), 'js');
+  watch(path.join(ROOT, 'templates'), 'templates');
   watch(ROOT, '');   // style.css lives here; ignores dist/ via filter above
 
+  const url = `http://localhost:${PORT}`;
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`\n  PhotoPlanner dev server ready`);
-    console.log(`  →  http://localhost:${PORT}`);
-    console.log(`  →  Watching js/**/*.js and style.css`);
-    console.log(`  →  Press Ctrl+C to stop\n`);
+    console.log(pc.green('\n  PhotoPlanner dev server ready'));
+    console.log(`  →  ${pc.cyan(pc.underline(url))}`);
+    console.log(`  →  ${pc.dim('Watching js/**/*.js, templates/**/*.html and style.css')}`);
+    console.log(`  →  ${pc.dim('Press Ctrl+C to stop')}\n`);
+    openBrowser(url);
   });
 });

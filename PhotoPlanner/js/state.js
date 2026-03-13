@@ -9,6 +9,7 @@ const state = {
   targetGroup: null,
   milkyWayGroup: null,
   finderSourceGroup: null,
+  finderBearingLayer: null,
   activeTileLayer: null,
   activeLayerName: 'street',
   labelsLayer: null,
@@ -23,4 +24,5 @@ const state = {
   selectedTimezone: '',
   _tzAutoDetected: false,
   dateSliderAnchor: null,
+  weather: null,
 };
