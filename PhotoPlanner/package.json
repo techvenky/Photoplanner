@@ -1,0 +1,11 @@
+{
+  "name": "photoplanner",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "terser": "^5.46.0"
+  }
+}
