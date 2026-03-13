@@ -1,0 +1,56 @@
+// ─── Milky Way Tab Template ────────────────────────────────────────────────────
+document.getElementById('tab-milkyway').innerHTML = `
+  <div class="page-container">
+    <h2 class="mb-3">🌌 Milky Way Planner</h2>
+    <div class="d-flex align-items-center gap-3 flex-wrap mb-4">
+      <input type="date" id="mw-date" class="form-control form-control-sm" style="width:auto" />
+      <button id="mw-use-location" class="btn btn-sm btn-outline-info">📍 Use My Location</button>
+      <span id="mw-location-label" class="text-secondary small">No location set</span>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card bg-body-tertiary border-secondary">
+        <div class="card-body">
+          <h5 class="card-title">Visibility Window</h5>
+          <div id="mw-visibility" class="text-secondary small">Set a location and date to calculate.</div>
+        </div>
+      </div>
+
+      <div class="card bg-body-tertiary border-secondary">
+        <div class="card-body">
+          <h5 class="card-title">Best Months</h5>
+          <div class="mw-months" id="mw-months"></div>
+        </div>
+      </div>
+
+      <div class="card bg-body-tertiary border-secondary">
+        <div class="card-body">
+          <h5 class="card-title">Tips</h5>
+          <ul class="list-unstyled small text-secondary mb-0" style="line-height:1.8">
+            <li>🌑 New Moon = best visibility (darkest sky)</li>
+            <li>🌍 Northern Hemisphere best: March–October</li>
+            <li>🏔 High altitude reduces atmospheric haze</li>
+            <li>🔦 Allow 20 min for dark adaptation</li>
+            <li>📸 Wide aperture (f/1.4–f/2.8), ISO 1600–6400</li>
+            <li>⏱ 15–25 second exposures to avoid star trails</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card bg-body-tertiary border-secondary">
+        <div class="card-body">
+          <h5 class="card-title">Galactic Center Rise/Set</h5>
+          <div id="mw-galactic" class="text-secondary small">Set a location to calculate.</div>
+        </div>
+      </div>
+
+      <div class="card bg-body-tertiary border-secondary">
+        <div class="card-body">
+          <h5 class="card-title">🌑 Next Best Dates</h5>
+          <p class="text-secondary small mb-2" style="font-size:0.75rem">Upcoming new moons — darkest skies for Milky Way</p>
+          <div id="mw-next-dates" class="text-secondary small">Set a date to calculate.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;

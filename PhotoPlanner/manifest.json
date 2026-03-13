@@ -1,0 +1,26 @@
+{
+  "name": "PhotoPlanner",
+  "short_name": "PhotoPlanner",
+  "description": "Photographer's planning tool — sun, moon, Milky Way & alignment finder",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1117",
+  "theme_color": "#f78166",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["photography", "utilities", "navigation"]
+}

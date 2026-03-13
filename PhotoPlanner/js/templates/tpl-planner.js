@@ -1,0 +1,178 @@
+// ─── Planner Tab Template ──────────────────────────────────────────────────────
+document.getElementById('tab-planner').innerHTML = `
+  <div class="planner-layout">
+
+    <div class="planner-sidebar">
+      <!-- Mobile drag handle (tap to close drawer) -->
+      <div id="sidebar-drag-handle" class="sidebar-drag-handle" aria-label="Close controls">
+        <div class="sidebar-drag-handle-pill"></div>
+      </div>
+
+      <!-- Desktop dock toggle (hidden on mobile) -->
+      <div class="sidebar-topbar">
+        <span class="sidebar-topbar-title">Controls</span>
+        <button id="sidebar-dock-btn" class="sidebar-dock-btn" title="Collapse sidebar" aria-label="Collapse sidebar">◀</button>
+      </div>
+
+      <div class="sidebar-content">
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Location</div>
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" id="location-search" class="form-control" placeholder="Search location…" />
+          <button id="search-btn" class="btn btn-primary">Search</button>
+        </div>
+        <button id="my-location-btn" class="btn btn-sm btn-outline-info w-100">📍 Use My Location</button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="sidebar-section-title mb-0">Date</div>
+          <div class="d-flex gap-1">
+            <button id="date-prev-week" class="btn btn-sm btn-outline-secondary px-2 py-0">‹</button>
+            <button id="date-next-week" class="btn btn-sm btn-outline-secondary px-2 py-0">›</button>
+          </div>
+        </div>
+        <div id="date-pills" class="date-pills-row mb-2"></div>
+        <input type="date" id="plan-date" class="form-control form-control-sm" />
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Timezone</div>
+        <select id="timezone-select" class="form-select form-select-sm">
+          <option value="">Local (Auto)</option>
+          <optgroup label="Americas">
+            <option value="America/New_York">New York (ET)</option>
+            <option value="America/Chicago">Chicago (CT)</option>
+            <option value="America/Denver">Denver (MT)</option>
+            <option value="America/Los_Angeles">Los Angeles (PT)</option>
+            <option value="America/Anchorage">Anchorage (AKT)</option>
+            <option value="Pacific/Honolulu">Honolulu (HT)</option>
+          </optgroup>
+          <optgroup label="Europe">
+            <option value="Europe/London">London (GMT/BST)</option>
+            <option value="Europe/Paris">Paris (CET)</option>
+            <option value="Europe/Berlin">Berlin (CET)</option>
+            <option value="Europe/Rome">Rome (CET)</option>
+            <option value="Europe/Moscow">Moscow (MSK)</option>
+          </optgroup>
+          <optgroup label="Middle East / Africa">
+            <option value="Asia/Dubai">Dubai (GST)</option>
+            <option value="Africa/Nairobi">Nairobi (EAT)</option>
+          </optgroup>
+          <optgroup label="Asia">
+            <option value="Asia/Kolkata">India (IST)</option>
+            <option value="Asia/Bangkok">Bangkok (ICT)</option>
+            <option value="Asia/Shanghai">Shanghai (CST)</option>
+            <option value="Asia/Tokyo">Tokyo (JST)</option>
+            <option value="Asia/Seoul">Seoul (KST)</option>
+          </optgroup>
+          <optgroup label="Pacific">
+            <option value="Australia/Sydney">Sydney (AET)</option>
+            <option value="Pacific/Auckland">Auckland (NZST)</option>
+          </optgroup>
+        </select>
+        <div id="tz-offset-label" class="text-secondary mt-1" style="font-size:0.7rem"></div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="d-flex justify-content-between align-items-center">
+          <span id="plan-time-display" class="time-display-big">6:00 AM</span>
+          <span id="plan-time-status" class="badge bg-secondary text-wrap text-end" style="font-size:0.65rem;max-width:110px"></span>
+        </div>
+        <input type="range" id="plan-time-slider" class="form-range" min="0" max="1439" value="360" step="5" style="accent-color:#e3b341" />
+        <div class="time-ticks"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span></div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Map Style</div>
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="btn btn-sm map-layer-btn active" data-layer="street">🗺 Street</button>
+          <button class="btn btn-sm map-layer-btn" data-layer="satellite">🛰 Satellite</button>
+          <button class="btn btn-sm map-layer-btn" data-layer="hybrid">🛰+🏷</button>
+          <button class="btn btn-sm map-layer-btn" data-layer="terrain">🏔 Terrain</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Overlays</div>
+        <div class="d-flex flex-column gap-1">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-sun" checked />
+            <label class="form-check-label small" for="show-sun">☀️ Sun Path</label>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-moon" />
+            <label class="form-check-label small" for="show-moon">🌕 Moon Path</label>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-golden" checked />
+            <label class="form-check-label small" for="show-golden">🌅 Key Times</label>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-milkyway" />
+            <label class="form-check-label small" for="show-milkyway">🌌 Milky Way</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Target Point</div>
+        <p class="text-secondary small mb-2" style="font-size:0.72rem">Find when sun/moon aligns with a landmark</p>
+        <button id="target-mode-btn" class="btn btn-sm w-100 mb-1" style="background:#6e3a8a;color:#fff">🎯 Set Target (Click Map)</button>
+        <button id="clear-target-btn" class="btn btn-sm btn-danger w-100" style="display:none">✕ Clear Target</button>
+      </div>
+
+      <div id="target-info" class="target-info-panel sidebar-section" style="display:none"></div>
+
+      <button id="finder-open-btn" class="btn btn-sm w-100 finder-btn mb-1">🔍 Find Alignment</button>
+      <button id="sky-view-btn" class="btn btn-sm w-100 sky-btn mb-2">🌐 Open Sky View</button>
+
+      <div id="planner-info" class="info-panel sidebar-section">
+        <div class="text-secondary small text-center py-1" style="font-size:0.75rem">Click map or search location to begin.</div>
+      </div>
+
+      </div><!-- /.sidebar-content -->
+    </div>
+
+    <div class="map-wrap">
+      <div id="map"></div>
+      <!-- Mobile FAB: opens controls drawer -->
+      <button id="mobile-sidebar-fab" class="mobile-map-fab" aria-label="Open controls">⚙ Controls</button>
+
+      <div id="timeline-overlay" class="timeline-overlay collapsed">
+        <div id="timeline-handle" class="timeline-handle">
+          <span class="tl-drag-pill"></span>
+          <div class="tl-handle-center">
+            <span class="tl-title">📈 Altitude Timeline</span>
+          </div>
+          <div class="tl-handle-controls">
+            <button id="tl-zoom-out" class="tl-ctrl-btn" title="Zoom out">−</button>
+            <span id="tl-zoom-label" class="tl-zoom-label">1×</span>
+            <button id="tl-zoom-in" class="tl-ctrl-btn" title="Zoom in">+</button>
+            <button id="tl-toggle" class="tl-ctrl-btn tl-toggle-btn" title="Show / Hide">▲</button>
+          </div>
+        </div>
+        <div id="tl-chart-wrap" class="tl-chart-wrap">
+          <canvas id="timeline-canvas"></canvas>
+        </div>
+        <div class="tl-legend">
+          <span class="tl-leg-item" style="--lc:#e3b341">☀️ Sun</span>
+          <span class="tl-leg-item" style="--lc:#a8d8ea">🌕 Moon</span>
+          <span class="tl-leg-sep"></span>
+          <span class="tl-leg-band" style="--lc:rgba(3,8,18,0.85)">🌑 Night</span>
+          <span class="tl-leg-band" style="--lc:rgba(15,50,120,0.7)">🔵 Blue Hour</span>
+          <span class="tl-leg-band" style="--lc:rgba(240,165,0,0.6)">🌅 Golden Hour</span>
+          <span class="tl-leg-band" style="--lc:rgba(200,220,255,0.4)">☀️ Day</span>
+          <span class="tl-leg-sep"></span>
+          <span class="tl-leg-band" style="--lc:rgba(180,100,255,0.55)">🌌 Milky Way window</span>
+          <span class="tl-leg-scroll-hint">← drag to scrub →</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mobile sidebar backdrop (tap to close) -->
+  <div id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop"></div>
+`;

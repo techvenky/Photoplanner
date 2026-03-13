@@ -1,0 +1,102 @@
+// ─── Modals Template ──────────────────────────────────────────────────────────
+document.getElementById('modals-root').innerHTML = `
+
+  <!-- ── Alignment Finder Modal ── -->
+  <div id="finder-modal" class="sky-modal" style="display:none">
+    <div class="finder-modal-content">
+      <div class="sky-modal-header">
+        <h3 class="m-0">🔍 Find Alignment</h3>
+        <button id="finder-close-btn" class="btn btn-sm btn-outline-secondary">✕</button>
+      </div>
+      <div class="finder-modal-body">
+
+        <!-- Body selector -->
+        <div class="d-flex gap-3 mb-3 align-items-center">
+          <span class="small text-secondary">Body:</span>
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="radio" name="finder-body" id="finder-body-moon" value="moon" checked />
+            <label class="form-check-label small" for="finder-body-moon">🌕 Moon</label>
+          </div>
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="radio" name="finder-body" id="finder-body-sun" value="sun" />
+            <label class="form-check-label small" for="finder-body-sun">☀️ Sun</label>
+          </div>
+        </div>
+
+        <!-- Sun/Moon position pin -->
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="small text-secondary" style="white-space:nowrap">🌕☀️ Sun/Moon:</span>
+          <div id="finder-source-label" class="text-secondary flex-grow-1" style="font-size:0.75rem">Not set</div>
+          <button id="finder-pin-source-btn" class="btn btn-sm btn-outline-warning py-0 px-2" style="font-size:0.72rem">📍 Pin on Map</button>
+          <button id="finder-clear-source-btn" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.72rem;display:none">✕</button>
+        </div>
+        <div class="text-secondary mb-2" style="font-size:0.7rem;padding-left:0.25rem">
+          Pin where the sun/moon should appear. Set <strong>Target</strong> pin on the opposite side (your camera spot). Subject sits between them.
+        </div>
+
+        <div id="finder-dist-label"     class="text-secondary mb-1" style="font-size:0.8rem"></div>
+        <div id="finder-moonsize-label" class="mb-3"                style="font-size:0.75rem;color:#58a6ff"></div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small">Start Date</label>
+            <input type="date" id="finder-start-date" class="form-control form-control-sm" />
+          </div>
+          <div class="col-6">
+            <label class="form-label small">End Date</label>
+            <input type="date" id="finder-end-date" class="form-control form-control-sm" />
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Target Azimuth (°N)</label>
+            <input type="number" id="finder-azimuth" class="form-control form-control-sm" min="0" max="360" step="0.5" value="180" />
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Az Tolerance (±°)</label>
+            <input type="number" id="finder-az-tol" class="form-control form-control-sm" min="0.5" max="15" step="0.5" value="2" />
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Target Height (m)</label>
+            <input type="number" id="finder-elev-m" class="form-control form-control-sm" step="5" value="0" />
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Height Tolerance (±m)</label>
+            <input type="number" id="finder-elev-tol" class="form-control form-control-sm" min="5" step="5" value="30" />
+          </div>
+        </div>
+
+        <button id="finder-search-btn" class="btn btn-primary w-100 mb-3">🔍 Search Alignments</button>
+
+        <div id="finder-results" class="finder-results-area">
+          <div class="text-secondary small text-center p-3">Set parameters above and click Search.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sky View Modal ── -->
+  <div id="sky-modal" class="sky-modal" style="display:none">
+    <div class="sky-modal-content">
+      <div class="sky-modal-header">
+        <h3 class="m-0">🌐 Sky View</h3>
+        <div class="d-flex align-items-center gap-3">
+          <span id="sky-time-label" class="sky-time-label">6:00 AM</span>
+          <button id="sky-close-btn" class="btn btn-sm btn-outline-secondary">✕</button>
+        </div>
+      </div>
+      <div class="sky-slider-row">
+        <input type="range" id="sky-time-slider" class="form-range" min="0" max="1439" value="360" step="5" style="accent-color:#e3b341" />
+        <div class="time-ticks" style="padding:0 4px"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span></div>
+      </div>
+      <div class="sky-modal-body">
+        <canvas id="sky-canvas" width="420" height="420"></canvas>
+        <div class="sky-legend">
+          <div class="legend-item"><span style="background:#e3b341"></span> Sun path</div>
+          <div class="legend-item"><span style="background:#a8d8ea"></span> Moon path</div>
+          <div class="legend-item"><span style="background:#c678dd"></span> Milky Way</div>
+          <div class="legend-item"><span style="background:#ff6b6b"></span> Target bearing</div>
+          <div id="sky-info" class="sky-info-text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;

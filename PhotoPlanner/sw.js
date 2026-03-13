@@ -1,0 +1,120 @@
+// ─── PhotoPlanner Service Worker ─────────────────────────────────────────────
+// Cache-first for app shell, network-first for map tiles.
+
+const CACHE_NAME = 'photoplanner-v1';
+
+// App shell: everything needed to run offline
+const APP_SHELL = [
+  './index.html',
+  './style.css',
+  './js/state.js',
+  './js/utils.js',
+  './js/celestial.js',
+  './js/geo.js',
+  './js/calculators.js',
+  './js/compass.js',
+  './js/timeline.js',
+  './js/target.js',
+  './js/skyview.js',
+  './js/sunpath.js',
+  './js/sunmoon.js',
+  './js/milkyway.js',
+  './js/location.js',
+  './js/datetime.js',
+  './js/finder.js',
+  './js/main.js',
+  './js/templates/tpl-planner.js',
+  './js/templates/tpl-sunmoon.js',
+  './js/templates/tpl-milkyway.js',
+  './js/templates/tpl-calculators.js',
+  './js/templates/tpl-modals.js',
+];
+
+// CDN libraries — cache on first fetch, serve from cache thereafter
+const CDN_HOSTS = [
+  'cdn.jsdelivr.net',
+  'unpkg.com',
+];
+
+// Map tile hosts — always try network, never cache (too many tiles)
+const TILE_HOSTS = [
+  'tile.openstreetmap.org',
+  'arcgisonline.com',
+  'opentopomap.org',
+  'basemaps.cartocdn.com',
+];
+
+// ─── Install: pre-cache app shell ────────────────────────────────────────────
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
+  );
+  self.skipWaiting();
+});
+
+// ─── Activate: clean up old caches ───────────────────────────────────────────
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      )
+    )
+  );
+  self.clients.claim();
+});
+
+// ─── Fetch: routing strategy ──────────────────────────────────────────────────
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+
+  // Map tiles — network only (skip service worker entirely)
+  if (TILE_HOSTS.some(h => url.hostname.includes(h))) {
+    return; // fall through to network
+  }
+
+  // CDN libraries — cache-first, update in background
+  if (CDN_HOSTS.some(h => url.hostname.includes(h))) {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  // App shell & local files — cache-first
+  if (url.origin === self.location.origin) {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  // Anything else (e.g. geocoding API) — network-first
+  event.respondWith(networkFirst(event.request));
+});
+
+// ─── Strategy helpers ─────────────────────────────────────────────────────────
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return new Response('Offline — resource not cached.', { status: 503 });
+  }
+}
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || new Response('Offline', { status: 503 });
+  }
+}
