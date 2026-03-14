@@ -94,23 +94,32 @@
 
     <!-- Top HUD bar -->
     <div class="ar-hud-top">
-      <div class="ar-title">📡 AR Sky View</div>
+      <div class="ar-title">📡 AR Sky</div>
       <div id="ar-status" class="ar-status">—</div>
-      <button id="ar-close-btn" class="btn btn-sm btn-outline-secondary ar-close">✕ Close</button>
+      <button id="ar-close-btn" class="btn btn-sm btn-outline-secondary ar-close">✕</button>
     </div>
 
-    <!-- FOV calibration -->
+    <!-- Date + time control strip -->
+    <div class="ar-hud-datetime">
+      <input type="date" id="ar-date-input" class="ar-date-input" />
+      <input type="range" id="ar-time-slider" class="ar-time-slider" min="0" max="1439" step="5" value="720" />
+      <span id="ar-time-label" class="ar-time-label">12:00 PM</span>
+    </div>
+
+    <!-- Bottom HUD: layer toggles + FOV calibration -->
     <div class="ar-hud-bottom-controls">
+      <div class="ar-layers">
+        <button class="ar-layer-btn active" data-layer="sun"     title="Sun">☀</button>
+        <button class="ar-layer-btn active" data-layer="moon"    title="Moon">☽</button>
+        <button class="ar-layer-btn active" data-layer="mw"      title="Milky Way">🌌</button>
+        <button class="ar-layer-btn active" data-layer="planets" title="Planets">🪐</button>
+        <button class="ar-layer-btn active" data-layer="path"    title="Paths">〰</button>
+        <button class="ar-layer-btn active" data-layer="grid"    title="Alt grid">⊞</button>
+      </div>
       <label class="ar-fov-label-txt">FOV
         <input type="range" id="ar-fov-slider" class="ar-fov-slider" min="30" max="100" step="1" value="62" />
         <span id="ar-fov-label">62°</span>
       </label>
-    </div>
-
-    <!-- Help tip shown until compass is active -->
-    <div class="ar-tip">
-      Point your <strong>rear camera</strong> at the sky.<br>
-      Sun ☀ and Moon ☽ markers appear when they enter the frame.
     </div>
   </div>
 

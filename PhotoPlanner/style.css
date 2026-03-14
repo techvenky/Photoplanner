@@ -10,10 +10,14 @@ body {
   background: #0d1117;
   color: #e6edf3;
   height: 100vh;
+  height: 100dvh; /* dynamic viewport height — shrinks when mobile browser chrome is visible */
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
+/* Prevent body scroll when a full-screen modal is open */
+body.modal-open { overflow: hidden !important; }
 
 /* NAV */
 .navbar {
@@ -153,6 +157,10 @@ input[type="number"], select {
   border-radius: 6px;
   font-size: 0.85rem;
   width: 100%;
+  /* iOS Safari zooms in when focused input font-size < 16px.
+     font-size: max(16px, …) keeps the design value on desktop
+     but guarantees at least 16px on mobile. */
+  font-size: max(16px, 0.85rem);
 }
 
 input:focus, select:focus {
@@ -1320,7 +1328,7 @@ button:hover { background: #2ea043; }
   pointer-events: none;
 }
 
-/* Top HUD bar */
+/* Top HUD bar — inset for notch / Dynamic Island */
 .ar-hud-top {
   position: absolute;
   top: 0;
@@ -1329,7 +1337,7 @@ button:hover { background: #2ea043; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.55rem 1rem;
+  padding: max(0.55rem, env(safe-area-inset-top, 0px)) 1rem 0.55rem;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(4px);
   gap: 0.75rem;
@@ -1357,20 +1365,98 @@ button:hover { background: #2ea043; }
   padding: 0.2rem 0.6rem;
 }
 
-/* Bottom FOV control strip */
-.ar-hud-bottom-controls {
+/* Date + time control strip (just below top HUD, shifted down by safe-area on notch devices) */
+.ar-hud-datetime {
   position: absolute;
-  bottom: 56px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(4px);
-  border-radius: 20px;
-  padding: 0.4rem 1rem;
+  top: 44px;
+  padding-top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.3rem 0.9rem;
+  background: rgba(0,0,0,0.48);
+  backdrop-filter: blur(4px);
   z-index: 10;
+}
+
+.ar-date-input {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  color: #e6edf3;
+  font-size: 0.72rem;
+  padding: 2px 5px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.ar-time-slider {
+  flex: 1;
+  accent-color: #f0c040;
+  cursor: pointer;
+  height: 4px;
+}
+
+.ar-time-label {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #f0c040;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 72px;
+  text-align: right;
+}
+
+/* Bottom HUD: layer toggles (left) + FOV calibration (right) — inset for home bar */
+.ar-hud-bottom-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem max(0.9rem, env(safe-area-inset-right, 0px)) max(0.6rem, env(safe-area-inset-bottom, 0px)) max(0.9rem, env(safe-area-inset-left, 0px));
+  background: rgba(0,0,0,0.52);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+/* Layer toggle buttons */
+.ar-layers {
+  display: flex;
+  gap: 5px;
+}
+
+.ar-layer-btn {
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 7px;
+  color: rgba(255,255,255,0.3);
+  font-size: 0.9rem;
+  width: 34px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+
+.ar-layer-btn.active {
+  color: #fff;
+  border-color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.12);
+}
+
+.ar-layer-btn:hover {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
 }
 
 .ar-fov-label-txt {
@@ -1382,24 +1468,69 @@ button:hover { background: #2ea043; }
 }
 
 .ar-fov-slider {
-  width: 120px;
+  width: 110px;
   accent-color: #3fb950;
   cursor: pointer;
 }
 
-/* Help tip at bottom */
-.ar-tip {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
-  color: #8b949e;
-  font-size: 0.72rem;
-  text-align: center;
-  padding: 0.4rem 1rem;
-  border-radius: 8px;
-  white-space: nowrap;
-  z-index: 10;
-  pointer-events: none;
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ─── Cross-platform mobile fixes (Android + iOS) ─────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1. Suppress the default blue/grey tap flash on Android and iOS WebKit */
+*, *::before, *::after {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 2. touch-action: manipulation disables double-tap zoom on buttons/links
+      while preserving normal scroll. Apply to every interactive element. */
+button, [role="button"], label, a,
+.nav-tab, .btn, .ar-layer-btn,
+.sidebar-drag-handle, .mobile-map-fab,
+.finder-result-row, .date-pill, .calc-tab {
+  touch-action: manipulation;
+}
+
+/* 3. Range sliders — prevent browser pan gesture from fighting the slider */
+input[type="range"] {
+  touch-action: pan-x;
+  cursor: pointer;
+}
+
+/* 4. Prevent accidental text selection while dragging sliders / date pills */
+input[type="range"],
+.tl-drag-pill, .date-pill,
+.sidebar-drag-handle, .ar-hud-top,
+.ar-hud-datetime, .ar-hud-bottom-controls {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 5. :active fallback for touch devices (replaces :hover which doesn't fire on touch) */
+.nav-tab:active                     { background: #21262d; color: #e6edf3; }
+.btn:active:not(:disabled)          { opacity: 0.75; }
+.ar-layer-btn:active                { background: rgba(255,255,255,0.22) !important; }
+.finder-result-row:active           { background: rgba(88,166,255,0.1); }
+.date-pill:active                   { opacity: 0.7; transform: scale(0.96); }
+.mobile-map-fab:active              { opacity: 0.8; }
+
+/* 6. Minimum 44×44 px touch targets for small controls (WCAG 2.5.5) */
+@media (max-width: 768px) {
+  .ar-layer-btn {
+    width: 40px;
+    height: 38px;
+  }
+  input[type="range"] {
+    min-height: 28px; /* larger hit-area without changing visual track */
+  }
+  /* Prevent iOS from zooming on input focus — 16px is the magic threshold */
+  input[type="text"],
+  input[type="date"],
+  input[type="time"],
+  input[type="number"],
+  input[type="search"],
+  select, textarea,
+  .form-control, .form-select {
+    font-size: 16px !important;
+  }
 }

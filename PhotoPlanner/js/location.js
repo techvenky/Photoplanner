@@ -98,7 +98,7 @@ async function autoDetectTimezone(lat, lon) {
       let opt = Array.from(sel.options).find(o => o.value === tz);
       if (!opt) {
         opt = new Option(tz, tz);
-        sel.insertBefore(opt, sel.options[1]); // just after "Local (Auto)"
+        sel.add(opt, 1); // insert at index 1 (just after "Local (Auto)"); appends if only one option
       }
       sel.value = tz;
       try {
@@ -136,9 +136,18 @@ function initLocationControls() {
       navigator.geolocation.getCurrentPosition(
         pos => { setLocation(pos.coords.latitude, pos.coords.longitude, 'My Location'); },
         err => {
-          const msg = err.code === 1 ? 'Location access denied. Check browser permissions.'
-                    : err.code === 2 ? 'Position unavailable. Try again.'
-                    : 'Location request timed out.';
+          const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+          const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+          let msg;
+          if (err.code === 1) {
+            msg = (isIOS || isSafari)
+              ? 'Location denied. Go to Settings → Privacy → Location Services → Safari and allow access.'
+              : 'Location denied. Allow access in your browser\'s site permissions and reload.';
+          } else if (err.code === 2) {
+            msg = 'Position unavailable. Ensure GPS/Wi-Fi is enabled and try again.';
+          } else {
+            msg = 'Location request timed out. Move to an area with better signal.';
+          }
           showToast(msg, 'danger');
         },
         { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }

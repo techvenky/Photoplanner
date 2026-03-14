@@ -413,6 +413,7 @@ function runFinderSearch() {
 // ─── Open modal & auto-fill fields ────────────────────────────────────────────
 function openFinderModal() {
   document.getElementById('finder-modal').style.display = 'flex';
+  document.body.classList.add('modal-open');
   updateFinderSourceLabel();
 
   var p = _finderParams();
@@ -459,6 +460,7 @@ function initFinderModal() {
 
   document.getElementById('finder-close-btn').addEventListener('click', function() {
     document.getElementById('finder-modal').style.display = 'none';
+    document.body.classList.remove('modal-open');
     _clearFinderBearingLine();
   });
 

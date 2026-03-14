@@ -1,33 +1,14 @@
 // ─── PhotoPlanner Service Worker ─────────────────────────────────────────────
 // Cache-first for app shell, network-first for map tiles.
 
-const CACHE_NAME = 'photoplanner-v1';
+const CACHE_NAME = 'photoplanner-v2';
 
 // App shell: everything needed to run offline
 const APP_SHELL = [
   './index.html',
-  './style.css',
-  './js/state.js',
-  './js/utils.js',
-  './js/celestial.js',
-  './js/geo.js',
-  './js/calculators.js',
-  './js/compass.js',
-  './js/timeline.js',
-  './js/target.js',
-  './js/skyview.js',
-  './js/sunpath.js',
-  './js/sunmoon.js',
-  './js/milkyway.js',
-  './js/location.js',
-  './js/datetime.js',
-  './js/finder.js',
-  './js/main.js',
-  './js/templates/tpl-planner.js',
-  './js/templates/tpl-sunmoon.js',
-  './js/templates/tpl-milkyway.js',
-  './js/templates/tpl-calculators.js',
-  './js/templates/tpl-modals.js',
+  './manifest.json',
+  './dist/bundle.min.js',
+  './dist/style.min.css',
 ];
 
 // CDN libraries — cache on first fetch, serve from cache thereafter

@@ -251,13 +251,17 @@ function drawSkyDome() {
 function initSkyModal() {
   document.getElementById('sky-view-btn').addEventListener('click', () => {
     document.getElementById('sky-modal').style.display = 'flex';
+    document.body.classList.add('modal-open');   // prevent background scroll on iOS/Android
     drawSkyDome();
   });
-  document.getElementById('sky-close-btn').addEventListener('click', () => {
+
+  function closeSkyModal() {
     document.getElementById('sky-modal').style.display = 'none';
-  });
+    document.body.classList.remove('modal-open');
+  }
+
+  document.getElementById('sky-close-btn').addEventListener('click', closeSkyModal);
   document.getElementById('sky-modal').addEventListener('click', e => {
-    if (e.target === document.getElementById('sky-modal'))
-      document.getElementById('sky-modal').style.display = 'none';
+    if (e.target === document.getElementById('sky-modal')) closeSkyModal();
   });
 }

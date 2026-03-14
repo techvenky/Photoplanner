@@ -41,7 +41,10 @@ async function fetchWeather(lat, lon) {
   });
 
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    const controller = new AbortController();
+    const timeout    = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 

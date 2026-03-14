@@ -108,7 +108,7 @@ function minifyCSS(css) {
   return css
     .replace(/\/\*[\s\S]*?\*\//g, '')          // strip /* block comments */
     .replace(/\s+/g, ' ')                       // collapse all whitespace to single space
-    .replace(/\s*([{}:;,>~+])\s*/g, '$1')      // remove spaces around delimiters
+    .replace(/\s*([{}:;,>~])\s*/g, '$1')       // remove spaces around delimiters (+ excluded to preserve calc() whitespace)
     .replace(/;\}/g, '}')                       // drop trailing semicolons before }
     .trim();
 }
