@@ -143,6 +143,7 @@ function initMap() {
   });
   initMobileSidebar();
   initSidebarDock();
+  initInfoModals();
 
   // Window resize handler
   window.addEventListener('resize', () => {
@@ -204,6 +205,29 @@ function initSidebarDock() {
     btn.setAttribute('aria-label', docked ? 'Expand sidebar' : 'Collapse sidebar');
     // Let the CSS transition finish before telling Leaflet to resize
     if (state.map) setTimeout(() => state.map.invalidateSize(), 280);
+  });
+}
+
+// ─── Help & About modals ──────────────────────────────────────────────────────
+function initInfoModals() {
+  [
+    { openId: 'readme-btn', modalId: 'readme-modal', closeId: 'readme-close-btn' },
+    { openId: 'about-btn',  modalId: 'about-modal',  closeId: 'about-close-btn'  },
+  ].forEach(({ openId, modalId, closeId }) => {
+    const modal    = document.getElementById(modalId);
+    const openBtn  = document.getElementById(openId);
+    const closeBtn = document.getElementById(closeId);
+    if (!modal) return;
+
+    function openModal()  { modal.style.display = 'flex'; document.body.classList.add('modal-open'); }
+    function closeModal() { modal.style.display = 'none'; document.body.classList.remove('modal-open'); }
+
+    if (openBtn)  openBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    // Close on backdrop click
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    // Close on Escape key
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.style.display !== 'none') closeModal(); });
   });
 }
 
