@@ -124,6 +124,196 @@ document.getElementById('modals-root').innerHTML = `
     </div>
   </div>
 
+  <!-- ── README / Help Modal ── -->
+  <div id="readme-modal" class="sky-modal" style="display:none">
+    <div class="info-modal-content">
+      <div class="sky-modal-header">
+        <h3 class="m-0">📖 Help &amp; Guide</h3>
+        <button id="readme-close-btn" class="btn btn-sm btn-outline-secondary">✕</button>
+      </div>
+      <div class="info-modal-body">
+
+        <div class="info-section">
+          <h5>🚀 Quick Start</h5>
+          <ol class="info-list">
+            <li>Click anywhere on the map — or use <strong>📍 My Location</strong> in the sidebar — to set your shooting spot.</li>
+            <li>Pick a <strong>date</strong> and drag the <strong>time slider</strong> to preview the sky at any moment.</li>
+            <li>Switch tabs (<em>Sun &amp; Moon, Milky Way, Calculators</em>) for detailed data and charts.</li>
+            <li>Tap <strong>📡 AR Sky</strong> to open the live AR view and point your phone at the sky.</li>
+          </ol>
+        </div>
+
+        <div class="info-section">
+          <h5>🗺️ Planner Tab</h5>
+          <ul class="info-list">
+            <li><strong>Map click</strong> → sets your location and updates all overlays.</li>
+            <li><strong>🎯 Set Target</strong> → click a second point (building, mountain, horizon). The alignment line and distance appear on the map.</li>
+            <li><strong>Layer buttons</strong> (Street / Satellite / Terrain) change the basemap.</li>
+            <li><strong>🌐 Sky View</strong> → polar sky dome showing sun &amp; moon arcs and Milky Way direction for the selected time.</li>
+            <li><strong>🔍 Find Alignment</strong> → searches a date range for moments when the sun or moon rises/sets along a specific azimuth (great for Manhattanhenge-style shots).</li>
+            <li><strong>⭐ Favorites</strong> → save and reload named locations.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>☀️ Sun &amp; Moon Tab</h5>
+          <ul class="info-list">
+            <li>Shows precise <strong>rise/set, golden hour, blue hour, civil/nautical/astronomical twilight</strong> times.</li>
+            <li><strong>Directions card</strong>: drag the time picker to see live azimuth &amp; altitude for any moment of the day.</li>
+            <li>Moon data includes <strong>phase, illumination %, age</strong> and next full/new moon dates.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>🌌 Milky Way Tab</h5>
+          <ul class="info-list">
+            <li>Shows Galactic Center <strong>rise, transit, set</strong> times and its current azimuth &amp; altitude.</li>
+            <li><strong>Visibility bar</strong> rates conditions based on moon illumination and horizon altitude.</li>
+            <li>Best shooting window is shown when Galactic Center is above the horizon and moon is below.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>📐 Calculators Tab</h5>
+          <ul class="info-list">
+            <li><strong>Depth of Field</strong> — sensor size, focal length, aperture, subject distance → near/far limits and hyperfocal distance.</li>
+            <li><strong>500 / NPF Rule</strong> — maximum exposure before stars trail for your lens and sensor.</li>
+            <li><strong>Long-exposure equivalents</strong> — ND filter stop calculator.</li>
+            <li><strong>Timelapse</strong> — interval, duration, frame rate → clip length.</li>
+            <li><strong>Field of View</strong> — sensor + focal length → horizontal, vertical and diagonal FOV in degrees.</li>
+            <li><strong>Star Trails</strong> — shutter / total rotation arc calculator.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>📡 Live AR View</h5>
+          <ul class="info-list">
+            <li>Opens the rear camera with sky objects (sun, moon, planets, Milky Way, paths) overlaid in real time.</li>
+            <li>Requires <strong>HTTPS</strong>, camera permission, and motion-sensor permission.</li>
+            <li><strong>Compass signal</strong>: on Android, Chrome may need Motion Sensors enabled.<br>
+                Go to Chrome ⋮ → Settings → Site settings → Motion sensors → <em>Allow</em>.</li>
+            <li>On iOS, tap the AR button and allow Motion &amp; Orientation Access when prompted.<br>
+                If denied: Settings → Safari → Motion &amp; Orientation Access → on.</li>
+            <li><strong>REL</strong> badge on the compass ruler means heading is device-relative (not north-locked). Point the phone at a known direction and mentally offset.</li>
+            <li>Use layer buttons (☀ ☽ 🌌 🪐 〰 ⊞) to toggle overlays. Adjust <strong>FOV</strong> slider to match your lens.</li>
+            <li>Date/time strip at the top lets you preview any future sky without leaving AR mode.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>🔍 Alignment Finder Tips</h5>
+          <ul class="info-list">
+            <li>Pin the sun/moon position on the map at the spot where you want the celestial body to appear.</li>
+            <li>Place the <strong>Target</strong> pin at your camera position on the opposite side of the subject.</li>
+            <li>The tool calculates the exact bearing and searches your date range for matching moments.</li>
+            <li>Narrow the Az Tolerance (±1–2°) for precision shots; widen it (±5°) for a broader search window.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>💾 Offline / PWA</h5>
+          <ul class="info-list">
+            <li>Install the app via your browser's <em>Add to Home Screen</em> option for offline use.</li>
+            <li>All core features work without internet. Map tiles are cached on first load.</li>
+            <li>Weather and geocoding (address search) require a live connection.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── About Modal ── -->
+  <div id="about-modal" class="sky-modal" style="display:none">
+    <div class="info-modal-content">
+      <div class="sky-modal-header">
+        <h3 class="m-0">ℹ️ About PhotoPlanner</h3>
+        <button id="about-close-btn" class="btn btn-sm btn-outline-secondary">✕</button>
+      </div>
+      <div class="info-modal-body">
+
+        <div class="text-center mb-4">
+          <div style="font-size:3rem;line-height:1">📷</div>
+          <h4 class="mt-2 mb-1" style="color:#f78166">PhotoPlanner</h4>
+          <div class="text-secondary small">Version 1.0.0</div>
+          <p class="mt-2 text-secondary" style="max-width:36ch;margin:0.75rem auto 0">
+            A photographer's planning tool for the sun, moon, Milky Way, and celestial alignments — works fully offline as a PWA.
+          </p>
+        </div>
+
+        <div class="info-section">
+          <h5>✨ Features</h5>
+          <div class="about-features-grid">
+            <div class="about-feature">🗺️ Interactive map planner with sun &amp; moon path overlays</div>
+            <div class="about-feature">☀️ Full solar &amp; lunar ephemeris — golden hour, twilight, phase</div>
+            <div class="about-feature">🌌 Milky Way Galactic Center rise/transit/set with visibility rating</div>
+            <div class="about-feature">📡 Live AR sky overlay — sun, moon, planets, Milky Way on camera</div>
+            <div class="about-feature">🔍 Alignment finder — Manhattanhenge-style azimuth search</div>
+            <div class="about-feature">🌐 Sky dome view — polar projection of the full sky</div>
+            <div class="about-feature">📐 Photography calculators — DOF, NPF, timelapse, ND, FOV, star trails</div>
+            <div class="about-feature">💾 Offline-capable PWA with service worker caching</div>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h5>🛠 Built With</h5>
+          <div class="about-tech-grid">
+            <a class="about-tech-item" href="https://mourner.github.io/suncalc/" target="_blank" rel="noopener">
+              <strong>SunCalc</strong><span>Sun &amp; moon positions</span>
+            </a>
+            <a class="about-tech-item" href="https://leafletjs.com/" target="_blank" rel="noopener">
+              <strong>Leaflet</strong><span>Interactive maps</span>
+            </a>
+            <a class="about-tech-item" href="https://getbootstrap.com/" target="_blank" rel="noopener">
+              <strong>Bootstrap 5</strong><span>UI components</span>
+            </a>
+            <a class="about-tech-item" href="https://www.chartjs.org/" target="_blank" rel="noopener">
+              <strong>Chart.js</strong><span>Data visualisation</span>
+            </a>
+            <a class="about-tech-item" href="https://day.js.org/" target="_blank" rel="noopener">
+              <strong>Day.js</strong><span>Timezone-aware dates</span>
+            </a>
+            <a class="about-tech-item" href="https://flatpickr.js.org/" target="_blank" rel="noopener">
+              <strong>Flatpickr</strong><span>Date picker</span>
+            </a>
+            <a class="about-tech-item" href="https://turfjs.org/" target="_blank" rel="noopener">
+              <strong>Turf.js</strong><span>Geospatial calculations</span>
+            </a>
+            <a class="about-tech-item" href="https://terser.org/" target="_blank" rel="noopener">
+              <strong>Terser</strong><span>JS minification</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h5>📡 Data Sources</h5>
+          <ul class="info-list">
+            <li><strong>Map tiles</strong>: OpenStreetMap, ESRI World Imagery, OpenTopoMap, CartoDB</li>
+            <li><strong>Weather</strong>: Open-Meteo (free, no API key required)</li>
+            <li><strong>Geocoding</strong>: Nominatim / OpenStreetMap</li>
+            <li><strong>Timezone detection</strong>: TimeAPI.io</li>
+            <li><strong>Planet positions</strong>: Paul Schlyter simplified orbital elements</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h5>🔗 Source Code</h5>
+          <div class="text-center mt-2">
+            <a href="https://github.com/techvenky/Photoplanner" target="_blank" rel="noopener"
+               class="btn btn-sm btn-outline-secondary">
+              GitHub — techvenky/Photoplanner
+            </a>
+          </div>
+        </div>
+
+        <div class="info-section text-center text-secondary" style="font-size:0.78rem;padding-top:0.5rem">
+          Open-source software. Map and weather data from their respective providers.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- ── Sky View Modal ── -->
   <div id="sky-modal" class="sky-modal" style="display:none">
     <div class="sky-modal-content">
