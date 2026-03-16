@@ -224,7 +224,7 @@ function _processOrientation(e, isAbsolute) {
       let diff = adjusted - AR.smoothHeading;
       while (diff >  180) diff -= 360;
       while (diff < -180) diff += 360;
-      AR.smoothHeading = (AR.smoothHeading + diff * 0.25 + 360) % 360;
+      AR.smoothHeading = (AR.smoothHeading + diff * 0.35 + 360) % 360;
     }
     AR.heading = AR.smoothHeading;
   }
@@ -251,7 +251,7 @@ function _processOrientation(e, isAbsolute) {
     if (AR.smoothElevation === null) {
       AR.smoothElevation = rawElev;
     } else {
-      AR.smoothElevation += (rawElev - AR.smoothElevation) * 0.25;
+      AR.smoothElevation += (rawElev - AR.smoothElevation) * 0.35;
     }
     AR.elevation = AR.smoothElevation;
   }
@@ -401,23 +401,28 @@ function _drawFrame() {
 }
 
 // ─── Projection: (azimuth°, altitude°) → canvas (x, y) ───────────────────────
-function _project(az, alt, canvas, clipFrac = 0.95) {
+// clipFrac trims the usable FOV so objects near the edge don't get partially
+// clipped by the canvas boundary.  Clip threshold is FOV_H/2 * clipFrac (half-FOV
+// is what maps to the screen edge — using full FOV here was the previous bug).
+function _project(az, alt, canvas, clipFrac = 0.92) {
   let dAz = az - AR.heading;
   while (dAz >  180) dAz -= 360;
   while (dAz < -180) dAz += 360;
 
   const camElev = AR.elevation != null ? AR.elevation : 0;
-  const dAlt = alt - camElev;
+  const dAlt    = alt - camElev;
 
-  // When device tilt is not tracked (elevation === null), allow a much wider
-  // vertical clip so objects at high altitude are still rendered on-screen.
-  const altClipFrac = AR.elevation !== null ? clipFrac : 1.8;
+  // Half-FOV is the angular distance from centre to the screen edge.
+  // Any object beyond halfH/halfV * clipFrac is outside the visible canvas
+  // and should be shown as an off-screen arrow instead.
+  const halfH = AR.FOV_H / 2;   // 31° for a 62° lens
+  const halfV = AR.FOV_V / 2;   // 23° for a 46° lens
 
-  if (Math.abs(dAz)  > AR.FOV_H * clipFrac)    return null;
-  if (Math.abs(dAlt) > AR.FOV_V * altClipFrac) return null;
+  if (Math.abs(dAz)  > halfH * clipFrac) return null;
+  if (Math.abs(dAlt) > halfV * clipFrac) return null;
 
-  const x = canvas.width  / 2 + (dAz  / (AR.FOV_H / 2)) * (canvas.width  / 2);
-  const y = canvas.height / 2 - (dAlt / (AR.FOV_V / 2)) * (canvas.height / 2);
+  const x = canvas.width  / 2 + (dAz  / halfH) * (canvas.width  / 2);
+  const y = canvas.height / 2 - (dAlt / halfV) * (canvas.height / 2);
   return { x, y };
 }
 
@@ -480,7 +485,8 @@ function _drawCrosshair(ctx, canvas) {
 
 // ─── Off-screen direction arrow ───────────────────────────────────────────────
 // Draws an arrow at the screen edge pointing toward a celestial object that is
-// outside the current camera FOV.  Mirrors the PhotoPills edge-indicator UX.
+// outside the current camera FOV.  Uses asymmetric margins so arrows never
+// overlap the compass strip (top) or info bar (bottom).
 function _drawOffScreenArrow(ctx, canvas, az, alt, color, symbol) {
   if (AR.heading === null) return;
 
@@ -491,34 +497,46 @@ function _drawOffScreenArrow(ctx, canvas, az, alt, color, symbol) {
   const camElev = AR.elevation != null ? AR.elevation : 0;
   const dAlt    = alt - camElev;
 
-  // Normalised screen-space direction
-  const nx = dAz  / (AR.FOV_H / 2);
-  const ny = -dAlt / (AR.FOV_V / 2);
-  const len = Math.sqrt(nx * nx + ny * ny);
-  if (len < 0.001) return; // already at centre — drawn normally
+  // Screen-space displacement vector (pixels from canvas centre)
+  const sx = (dAz  / (AR.FOV_H / 2)) * (canvas.width  / 2);
+  const sy = -(dAlt / (AR.FOV_V / 2)) * (canvas.height / 2);
+  const slen = Math.sqrt(sx * sx + sy * sy);
+  if (slen < 1) return;
 
-  const margin = Math.max(32, canvas.width * 0.07);
-  const hw = canvas.width  / 2 - margin;
-  const hh = canvas.height / 2 - margin;
-  const ux = nx / len, uy = ny / len;
+  const cx = canvas.width  / 2;
+  const cy = canvas.height / 2;
 
-  // Intersect the unit-direction with the inset rectangle boundary
+  // Safe-area boundaries — keep arrows clear of the compass strip and info bar.
+  // Compass strip ends at ~11.4% of height; info bar occupies ~10% at the bottom.
+  const mTop    = Math.round(canvas.height * 0.135) + 4; // below compass strip
+  const mBottom = Math.round(canvas.height * 0.105) + 4; // above info bar
+  const mSide   = Math.max(28, Math.round(canvas.width * 0.065));
+
+  const xMin = mSide;
+  const xMax = canvas.width  - mSide;
+  const yMin = mTop;
+  const yMax = canvas.height - mBottom;
+
+  // Find where the direction ray exits the safe-area rectangle
   let t = Infinity;
-  if (Math.abs(ux) > 0.001) t = Math.min(t, hw / (Math.abs(ux) * canvas.width  / 2));
-  if (Math.abs(uy) > 0.001) t = Math.min(t, hh / (Math.abs(uy) * canvas.height / 2));
-  if (!isFinite(t)) return;
+  if (sx > 0.5)  t = Math.min(t, (xMax - cx) / sx);
+  if (sx < -0.5) t = Math.min(t, (xMin - cx) / sx);
+  if (sy > 0.5)  t = Math.min(t, (yMax - cy) / sy);
+  if (sy < -0.5) t = Math.min(t, (yMin - cy) / sy);
+  if (!isFinite(t) || t <= 0) return;
 
-  const ex = canvas.width  / 2 + ux * t * canvas.width  / 2;
-  const ey = canvas.height / 2 + uy * t * canvas.height / 2;
+  // Clamp to boundary in case of floating-point overshoot
+  const ex = Math.min(xMax, Math.max(xMin, cx + sx * t));
+  const ey = Math.min(yMax, Math.max(yMin, cy + sy * t));
 
-  const r           = Math.max(14, canvas.width * 0.032);
-  const arrowAngle  = Math.atan2(uy, ux);
+  const r          = Math.max(14, canvas.width * 0.032);
+  const arrowAngle = Math.atan2(sy, sx);
 
   ctx.save();
   ctx.translate(ex, ey);
 
   // Dark backing circle
-  ctx.fillStyle = 'rgba(0,0,0,0.62)';
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
   ctx.beginPath();
   ctx.arc(0, 0, r * 1.3, 0, Math.PI * 2);
   ctx.fill();
@@ -534,7 +552,7 @@ function _drawOffScreenArrow(ctx, canvas, az, alt, color, symbol) {
   ctx.fill();
   ctx.rotate(-arrowAngle);
 
-  // Symbol label below the arrow circle
+  // Symbol label
   const fnt = Math.max(10, Math.round(canvas.height * 0.022));
   ctx.font         = `bold ${fnt}px sans-serif`;
   ctx.fillStyle    = color;
@@ -618,7 +636,7 @@ function _drawCelestialPath(ctx, canvas, getSunCalcPos, color) {
     const az  = (toDeg(pos.azimuth) + 180 + 360) % 360;
     const alt =  toDeg(pos.altitude);
     if (alt < -3) { lastPt = null; continue; }
-    const pt = _project(az, alt, canvas, 0.98);
+    const pt = _project(az, alt, canvas, 1.0);
     if (!pt) { lastPt = null; continue; }
     if (!lastPt) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
     lastPt = pt;
@@ -728,17 +746,17 @@ function _drawRiseSetOnRuler(ctx, canvas, date, lat, lon) {
   const pixPerDeg = canvas.width / AR.FOV_H;
   const fntSz     = Math.max(9, Math.round(canvas.height * 0.021));
 
-  // Row just below the compass ruler background
-  const markerY = Math.round(canvas.height * 0.06)    // y0
-                + Math.round(canvas.height * 0.055)   // tickH
-                + Math.round(canvas.height * 0.03)    // gap
-                + Math.max(10, Math.round(canvas.height * 0.028)) // cardinal label height
-                + fntSz + 4;
+  // Match the compass ruler's stripH (tickTop + rulerH + 4) so rise/set
+  // markers sit immediately below the compass strip background.
+  const compassStripH = Math.round(canvas.height * 0.042)   // tickTop
+                      + Math.round(canvas.height * 0.072)   // rulerH
+                      + 4;
+  const markerY = compassStripH + fntSz + 2;
 
   // Extend dark background to cover marker row
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(0, markerY - fntSz - 2, canvas.width, fntSz + 8);
+  ctx.fillRect(0, compassStripH, canvas.width, fntSz + 6);
   ctx.restore();
 
   function _mark(time, getPosFn, color, symbol, rise) {
@@ -771,7 +789,7 @@ function _drawGalacticCenter(ctx, canvas, date, lat, lon) {
   const alt = toDeg(gc.altitude);
   if (alt < -10) return;
 
-  const pt = _project(az, alt, canvas, 0.95);
+  const pt = _project(az, alt, canvas);
   if (!pt) {
     _drawOffScreenArrow(ctx, canvas, az, alt, '#c678dd', '🌌');
     return;
@@ -918,7 +936,7 @@ function _drawPlanets(ctx, canvas, date, lat, lon) {
     try { pos = _solvePlanetAzAlt(name, date, lat, lon); } catch (_) { continue; }
     if (pos.alt < -10) continue;
 
-    const pt = _project(pos.az, pos.alt, canvas, 0.95);
+    const pt = _project(pos.az, pos.alt, canvas);
     if (!pt) {
       _drawOffScreenArrow(ctx, canvas, pos.az, pos.alt, pl.color, pl.symbol);
       continue;
