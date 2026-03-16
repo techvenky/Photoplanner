@@ -14,6 +14,7 @@ const AR = {
   compassTimer:    null,   // fallback timer handle
   calibrateTimer:  null,   // calibration-prompt timer handle
   absEventSeen:    false,  // true if deviceorientationabsolute has fired at least once
+  absNullCount:    0,      // consecutive null-alpha absolute events (high = permission blocked)
   layers: { sun: true, moon: true, mw: true, planets: true, path: true, grid: true },
 };
 
@@ -93,6 +94,7 @@ function closeARView() {
   AR.useAbsolute  = false;
   AR.useRelative  = false;
   AR.absEventSeen = false;
+  AR.absNullCount = 0;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -155,11 +157,15 @@ function _getScreenAngle() {
 // ─── Orientation ──────────────────────────────────────────────────────────────
 function _onOrientationAbsolute(e) {
   AR.absEventSeen = true;
-  // Only mark as absolute once we actually have valid compass data.
-  // Samsung/Android fires the event immediately with alpha=null until the
-  // magnetometer acquires a fix (requires device calibration via figure-8).
   if (e.alpha != null || e.webkitCompassHeading != null) {
+    // Valid compass data acquired — mark absolute and reset null counter.
     AR.useAbsolute = true;
+    AR.absNullCount = 0;
+  } else {
+    // alpha is null: sensor is firing but compass data is unavailable.
+    // High counts (>20 ≈ 2 s at 10 Hz) mean Chrome's Motion Sensor
+    // site permission is blocked rather than just uncalibrated.
+    AR.absNullCount++;
   }
   _processOrientation(e, true);
 }
@@ -232,31 +238,41 @@ function _startOrientation() {
   window.addEventListener('deviceorientationabsolute', _onOrientationAbsolute, true);
   window.addEventListener('deviceorientation',         _onOrientation,         true);
 
-  // After 2 s: if the absolute sensor is firing but alpha is still null, the
-  // magnetometer needs calibration (common on Samsung Galaxy devices out of the box).
+  // After 2 s: if absolute events are firing but alpha is still null, show
+  // the right guidance based on how many null events we've seen.
+  // >20 events ≈ sensor is running but blocked → Chrome site permission.
+  // Few events → magnetometer not yet calibrated → suggest figure-8.
   AR.calibrateTimer = setTimeout(() => {
     AR.calibrateTimer = null;
     if (AR.absEventSeen && AR.heading === null) {
-      showToast(
-        'Compass needs calibration — slowly rotate the device in a figure-8 pattern.',
-        'warning'
-      );
+      if (AR.absNullCount > 20) {
+        showToast(
+          'Compass blocked. In Chrome: tap ⋮ → Settings → Site settings → Motion sensors → Allow, then reopen AR.',
+          'warning'
+        );
+      } else {
+        showToast(
+          'Compass needs calibration — slowly rotate the device in a figure-8 pattern.',
+          'warning'
+        );
+      }
     }
   }, 2000);
 
-  // After 6 s with no heading signal at all, enable relative-alpha fallback so
-  // that Android browsers without absolute-orientation support (Firefox, older
-  // Samsung Internet) still get a usable — though not north-locked — compass.
+  // After 3 s with no heading at all, enable the relative-alpha fallback so
+  // the AR view becomes usable immediately — objects won't be north-locked but
+  // tilt/elevation will be correct.  A "(REL)" badge on the compass ruler
+  // tells the user the heading is device-relative, not geographic north.
   AR.compassTimer = setTimeout(() => {
     AR.compassTimer = null;
     if (AR.heading === null && !AR.useAbsolute) {
       AR.useRelative = true;
       showToast(
-        'No absolute compass. Using relative orientation — rotate the device once to set North.',
+        'No absolute compass — using device orientation (REL). Objects are shown relative to the direction you were facing when AR opened.',
         'warning'
       );
     }
-  }, 6000);
+  }, 3000);
 }
 
 function _stopOrientation() {
@@ -297,9 +313,14 @@ function _drawFrame() {
     return;
   }
   if (AR.heading === null) {
-    const hint = AR.absEventSeen
-      ? 'Compass calibrating…\nRotate device in a figure-8 pattern\nthen point at the horizon'
-      : 'Waiting for compass…\nPoint device at the horizon\nEnsure Motion & Orientation access is allowed';
+    let hint;
+    if (!AR.absEventSeen) {
+      hint = 'Waiting for compass…\nPoint device at the horizon\nEnsure Motion & Orientation access is allowed';
+    } else if (AR.absNullCount > 20) {
+      hint = 'Compass access blocked\nChrome: tap ⋮ → Settings → Site settings\n→ Motion sensors → Allow\nthen reopen AR';
+    } else {
+      hint = 'Compass calibrating…\nRotate device in a figure-8 pattern\nthen point at the horizon';
+    }
     _drawMessage(ctx, canvas, hint);
     return;
   }
@@ -478,10 +499,11 @@ function _drawCompassRuler(ctx, canvas) {
     }
   }
 
-  // Centre heading readout
-  const dir   = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  const label = `${dir[Math.round(heading / 22.5) % 16]}  ${Math.round(heading)}°`;
-  ctx.fillStyle = '#f0c040';
+  // Centre heading readout (amber = absolute/north-locked, orange = relative)
+  const dir      = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const relSuffix = AR.useRelative ? '  REL' : '';
+  const label    = `${dir[Math.round(heading / 22.5) % 16]}  ${Math.round(heading)}°${relSuffix}`;
+  ctx.fillStyle = AR.useRelative ? '#ff9f43' : '#f0c040';
   ctx.font      = `bold ${Math.max(12, Math.round(canvas.height * 0.032))}px monospace`;
   ctx.textAlign = 'center';
   ctx.fillText(label, canvas.width / 2, Math.round(canvas.height * 0.03));
@@ -812,7 +834,13 @@ function _updateStatusBar() {
   const el = document.getElementById('ar-status');
   if (!el) return;
   if (AR.heading === null) {
-    el.textContent = AR.absEventSeen ? 'Calibrating compass…' : 'No compass signal';
+    if (!AR.absEventSeen) {
+      el.textContent = 'No compass signal';
+    } else if (AR.absNullCount > 20) {
+      el.textContent = 'Compass blocked — check Chrome site settings';
+    } else {
+      el.textContent = 'Calibrating compass…';
+    }
     return;
   }
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
@@ -820,7 +848,8 @@ function _updateStatusBar() {
   const elev = AR.elevation != null ? `  ↑${AR.elevation.toFixed(0)}°` : '';
   const date = _getARDate();
   const time = minutesToAmPm(date.getHours() * 60 + date.getMinutes());
-  el.textContent = `${dir} ${Math.round(AR.heading)}°${elev}  ·  ${time}`;
+  const rel  = AR.useRelative ? '  (REL)' : '';
+  el.textContent = `${dir} ${Math.round(AR.heading)}°${elev}${rel}  ·  ${time}`;
 }
 
 // ─── Waiting / error message ──────────────────────────────────────────────────
