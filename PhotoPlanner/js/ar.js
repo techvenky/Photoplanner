@@ -79,6 +79,7 @@ async function openARView() {
   document.body.classList.add('modal-open');
 
   await _startCamera();
+  _initCompassOverlayBtn();
   _startOrientation();
   _scheduleFrame();
 }
@@ -86,6 +87,7 @@ async function openARView() {
 function closeARView() {
   const overlay = document.getElementById('ar-overlay');
   if (overlay) overlay.classList.remove('active');
+  _hideCompassOverlay();
   document.body.classList.remove('modal-open');
   _stopCamera();
   _stopOrientation();
@@ -262,39 +264,44 @@ function _startOrientation() {
   window.addEventListener('deviceorientationabsolute', _onOrientationAbsolute, true);
   window.addEventListener('deviceorientation',         _onOrientation,         true);
 
-  // After 2 s: if absolute events are firing but alpha is still null, show
-  // the right guidance based on how many null events we've seen.
-  // >20 events ≈ sensor is running but blocked → Chrome site permission.
-  // Few events → magnetometer not yet calibrated → suggest figure-8.
+  // Show initial waiting overlay immediately
+  _showCompassOverlay('Calibrating compass…', false);
+
+  // After 2 s: update overlay message based on sensor state.
+  // >20 null events ≈ Chrome Motion Sensor permission is blocked.
+  // Few events → magnetometer uncalibrated → suggest figure-8.
   AR.calibrateTimer = setTimeout(() => {
     AR.calibrateTimer = null;
-    if (AR.absEventSeen && AR.heading === null) {
+    if (AR.heading === null && AR.absEventSeen) {
       if (AR.absNullCount > 20) {
-        showToast(
-          'Compass blocked. In Chrome: tap ⋮ → Settings → Site settings → Motion sensors → Allow, then reopen AR.',
-          'warning'
-        );
+        _showCompassOverlay('Compass access is blocked by your browser.', true);
       } else {
-        showToast(
-          'Compass needs calibration — slowly rotate the device in a figure-8 pattern.',
-          'warning'
+        _showCompassOverlay(
+          'Rotate the device in a figure-8 pattern to calibrate the compass.',
+          false
         );
       }
     }
   }, 2000);
 
-  // After 3 s with no heading at all, enable the relative-alpha fallback so
-  // the AR view becomes usable immediately — objects won't be north-locked but
-  // tilt/elevation will be correct.  A "(REL)" badge on the compass ruler
-  // tells the user the heading is device-relative, not geographic north.
+  // After 3 s with no heading, auto-enable REL mode so AR is usable without
+  // a geographic compass.  The HTML overlay is hidden by _drawFrame once heading
+  // is set; if still null after 3 s we force-set heading=0 (REL) so rendering starts.
   AR.compassTimer = setTimeout(() => {
     AR.compassTimer = null;
     if (AR.heading === null && !AR.useAbsolute) {
       AR.useRelative = true;
-      showToast(
-        'No absolute compass — using device orientation (REL). Objects are shown relative to the direction you were facing when AR opened.',
-        'warning'
-      );
+      // Only auto-set REL if sensors are firing (so we at least have tilt data).
+      // If absEventSeen is false, sensors may be fully absent — keep overlay visible.
+      if (AR.absEventSeen || AR.absNullCount > 0) {
+        AR.heading = 0;
+        AR.smoothHeading = 0;
+        _hideCompassOverlay();
+        showToast(
+          'No absolute compass — using device orientation (REL). Objects shown relative to opening direction.',
+          'warning'
+        );
+      }
     }
   }, 3000);
 }
@@ -304,6 +311,32 @@ function _stopOrientation() {
   window.removeEventListener('deviceorientation',         _onOrientation,         true);
   if (AR.compassTimer)   { clearTimeout(AR.compassTimer);   AR.compassTimer   = null; }
   if (AR.calibrateTimer) { clearTimeout(AR.calibrateTimer); AR.calibrateTimer = null; }
+}
+
+// ─── Compass overlay (HTML, not canvas) ───────────────────────────────────────
+function _showCompassOverlay(msg, showSteps) {
+  const el    = document.getElementById('ar-compass-overlay');
+  const msgEl = document.getElementById('ar-compass-msg');
+  const steps = document.getElementById('ar-compass-steps');
+  if (!el) return;
+  if (msgEl) msgEl.textContent = msg;
+  if (steps) steps.style.display = showSteps ? '' : 'none';
+  el.style.display = '';
+}
+function _hideCompassOverlay() {
+  const el = document.getElementById('ar-compass-overlay');
+  if (el) el.style.display = 'none';
+}
+function _initCompassOverlayBtn() {
+  const btn = document.getElementById('ar-rel-mode-btn');
+  if (!btn || btn._arBound) return;
+  btn._arBound = true;
+  btn.addEventListener('click', () => {
+    AR.heading    = 0;
+    AR.useRelative = true;
+    AR.smoothHeading = 0;
+    _hideCompassOverlay();
+  });
 }
 
 // ─── Draw loop ────────────────────────────────────────────────────────────────
@@ -336,18 +369,36 @@ function _drawFrame() {
     _drawMessage(ctx, canvas, 'Set a location first (use map or search)');
     return;
   }
+
+  // When heading is null, draw the reference lines (grid, horizon, crosshair)
+  // so the user sees a live camera with context lines while the overlay asks
+  // them to fix compass access or tap REL Mode.
   if (AR.heading === null) {
-    let hint;
+    if (AR.layers.grid) _drawElevationGrid(ctx, canvas);
+    _drawHorizon(ctx, canvas);
+    _drawCrosshair(ctx, canvas);
+    // Update the HTML overlay message based on sensor state
     if (!AR.absEventSeen) {
-      hint = 'Waiting for compass…\nPoint device at the horizon\nEnsure Motion & Orientation access is allowed';
+      _showCompassOverlay(
+        'Point the device at the horizon.\nEnsure Motion & Orientation access is allowed.',
+        false
+      );
     } else if (AR.absNullCount > 20) {
-      hint = 'Compass access blocked\nChrome: tap ⋮ → Settings → Site settings\n→ Motion sensors → Allow\nthen reopen AR';
+      _showCompassOverlay(
+        'Compass access is blocked by your browser.',
+        true
+      );
     } else {
-      hint = 'Compass calibrating…\nRotate device in a figure-8 pattern\nthen point at the horizon';
+      _showCompassOverlay(
+        'Rotate the device in a figure-8 pattern to calibrate the compass.',
+        false
+      );
     }
-    _drawMessage(ctx, canvas, hint);
     return;
   }
+
+  // Heading acquired — hide the overlay
+  _hideCompassOverlay();
 
   const date = _getARDate();
   const lat  = state.currentLat, lon = state.currentLon;

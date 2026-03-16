@@ -106,6 +106,22 @@
       <span id="ar-time-label" class="ar-time-label">12:00 PM</span>
     </div>
 
+    <!-- Compass waiting overlay (shown instead of canvas message when heading is null) -->
+    <div id="ar-compass-overlay" class="ar-compass-overlay" style="display:none">
+      <div class="ar-compass-overlay-box">
+        <div class="ar-compass-icon">🧭</div>
+        <h5 class="ar-compass-title">Waiting for Compass</h5>
+        <p id="ar-compass-msg" class="ar-compass-msg">Calibrating compass…</p>
+        <div id="ar-compass-steps" class="ar-compass-steps" style="display:none">
+          <p>Chrome: tap ⋮ → Settings → Site settings → Motion sensors → Allow, then reopen AR.</p>
+          <p>Samsung Internet: tap ☰ → Settings → Sites and downloads → Motion sensors → Allow.</p>
+        </div>
+        <button id="ar-rel-mode-btn" class="btn btn-outline-warning btn-sm mt-3">
+          Continue without compass (REL Mode)
+        </button>
+      </div>
+    </div>
+
     <!-- Bottom HUD: layer toggles + FOV calibration -->
     <div class="ar-hud-bottom-controls">
       <div class="ar-layers">
