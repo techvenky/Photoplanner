@@ -359,33 +359,45 @@ function _drawFrame() {
   const moonAz  = (toDeg(moonPos.azimuth) + 180 + 360) % 360;
   const moonAlt =  toDeg(moonPos.altitude);
 
-  // ── Draw layers bottom-up ────────────────────────────────────────────────────
-  if (AR.layers.grid)    _drawElevationGrid(ctx, canvas);
+  // ── 1. Reference lines (always drawn, no crashes possible) ──────────────────
+  if (AR.layers.grid) _drawElevationGrid(ctx, canvas);
   _drawHorizon(ctx, canvas);
   _drawCrosshair(ctx, canvas);
+
+  // ── 2. Orbital path arcs ─────────────────────────────────────────────────────
   if (AR.layers.path) {
-    _drawCelestialPath(ctx, canvas,
-      (d, la, lo) => SunCalc.getPosition(d, la, lo), 'rgba(255,200,50,0.45)');
-    _drawCelestialPath(ctx, canvas,
-      (d, la, lo) => SunCalc.getMoonPosition(d, la, lo), 'rgba(150,200,255,0.35)');
+    try {
+      _drawCelestialPath(ctx, canvas,
+        (d, la, lo) => SunCalc.getPosition(d, la, lo),     'rgba(255,200,50,0.45)');
+      _drawCelestialPath(ctx, canvas,
+        (d, la, lo) => SunCalc.getMoonPosition(d, la, lo), 'rgba(150,200,255,0.35)');
+    } catch (_) {}
   }
-  if (AR.layers.mw)      _drawGalacticCenter(ctx, canvas, date, lat, lon);
-  if (AR.layers.planets) _drawPlanets(ctx, canvas, date, lat, lon);
+
+  // ── 3. Compass ruler — moved BEFORE celestial objects so it always renders ───
   _drawCompassRuler(ctx, canvas);
-  _drawRiseSetOnRuler(ctx, canvas, date, lat, lon);
+  try { _drawRiseSetOnRuler(ctx, canvas, date, lat, lon); } catch (_) {}
+
+  // ── 4. Celestial objects — each isolated so one crash can't block the rest ───
+  if (AR.layers.mw)      { try { _drawGalacticCenter(ctx, canvas, date, lat, lon); } catch (_) {} }
+  if (AR.layers.planets) { try { _drawPlanets(ctx, canvas, date, lat, lon);        } catch (_) {} }
 
   const sunXY  = _project(sunAz,  sunAlt,  canvas);
   const moonXY = _project(moonAz, moonAlt, canvas);
   if (AR.layers.sun) {
-    if (sunXY)  _drawSun(ctx, sunXY.x, sunXY.y, sunAlt, canvas);
-    else        _drawOffScreenArrow(ctx, canvas, sunAz,  sunAlt,  '#FFD700',            '☀');
+    try {
+      if (sunXY)  _drawSun(ctx, sunXY.x, sunXY.y, sunAlt, canvas);
+      else        _drawOffScreenArrow(ctx, canvas, sunAz,  sunAlt,  '#FFD700',             '☀');
+    } catch (_) {}
   }
   if (AR.layers.moon) {
-    if (moonXY) _drawMoon(ctx, moonXY.x, moonXY.y, moonAlt, canvas);
-    else        _drawOffScreenArrow(ctx, canvas, moonAz, moonAlt, 'rgba(180,220,255,1)', '☽');
+    try {
+      if (moonXY) _drawMoon(ctx, moonXY.x, moonXY.y, moonAlt, canvas);
+      else        _drawOffScreenArrow(ctx, canvas, moonAz, moonAlt, 'rgba(180,220,255,1)', '☽');
+    } catch (_) {}
   }
 
-  _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt);
+  try { _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt); } catch (_) {}
 }
 
 // ─── Projection: (azimuth°, altitude°) → canvas (x, y) ───────────────────────
@@ -407,6 +419,26 @@ function _project(az, alt, canvas, clipFrac = 0.95) {
   const x = canvas.width  / 2 + (dAz  / (AR.FOV_H / 2)) * (canvas.width  / 2);
   const y = canvas.height / 2 - (dAlt / (AR.FOV_V / 2)) * (canvas.height / 2);
   return { x, y };
+}
+
+// ─── roundRect polyfill (Chrome <99, Samsung Internet, older WebViews) ────────
+// ctx.roundRect is not available everywhere; fall back to quadraticCurveTo.
+function _roundRect(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  const rad = Math.min(r, Math.min(w, h) / 2);
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.quadraticCurveTo(x + w, y,     x + w, y + rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+  ctx.lineTo(x + rad, y + h);
+  ctx.quadraticCurveTo(x,     y + h, x, y + h - rad);
+  ctx.lineTo(x, y + rad);
+  ctx.quadraticCurveTo(x,     y,     x + rad, y);
+  ctx.closePath();
 }
 
 // ─── Viewfinder crosshair ─────────────────────────────────────────────────────
@@ -595,57 +627,94 @@ function _drawCelestialPath(ctx, canvas, getSunCalcPos, color) {
   ctx.restore();
 }
 
-// ─── Compass ruler ────────────────────────────────────────────────────────────
+// ─── Compass ruler (PhotoPills-style) ────────────────────────────────────────
 function _drawCompassRuler(ctx, canvas) {
   if (AR.heading === null) return;
 
-  const heading   = AR.heading;
-  const tickH     = Math.round(canvas.height * 0.055);
-  const y0        = Math.round(canvas.height * 0.06);
-  const yLabel    = y0 + tickH + Math.round(canvas.height * 0.03);
-  const pixPerDeg = canvas.width / AR.FOV_H;
+  const heading    = AR.heading;
+  const pixPerDeg  = canvas.width / AR.FOV_H;
+  const rulerH     = Math.round(canvas.height * 0.072);   // total ruler strip height
+  const tickTop    = Math.round(canvas.height * 0.042);   // where ticks start (below heading text)
+  const cardFntSz  = Math.max(11, Math.round(canvas.height * 0.030));
+  const headFntSz  = Math.max(14, Math.round(canvas.height * 0.038));
+  const stripH     = tickTop + rulerH + 4;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(0, 0, canvas.width, yLabel + 4);
 
-  const CARDS = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE',
-                  180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+  // Dark strip background
+  ctx.fillStyle = 'rgba(0,0,0,0.52)';
+  ctx.fillRect(0, 0, canvas.width, stripH);
 
-  for (let offset = -AR.FOV_H; offset <= AR.FOV_H; offset += 5) {
-    const bearing     = ((heading + offset) % 360 + 360) % 360;
-    const nearestFive = Math.round(bearing / 5) * 5 % 360;
-    if (Math.abs(bearing - nearestFive) > 2) continue;
+  // Centre-pointer triangle ▼ above the tick strip
+  const cx = canvas.width / 2;
+  const triY = tickTop - 1;
+  ctx.fillStyle = AR.useRelative ? '#ff9f43' : '#f0c040';
+  ctx.beginPath();
+  ctx.moveTo(cx, triY + 6);
+  ctx.lineTo(cx - 5, triY);
+  ctx.lineTo(cx + 5, triY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tick marks + cardinal labels
+  const CARDS = { 0:'N', 45:'NE', 90:'E', 135:'SE', 180:'S', 225:'SW', 270:'W', 315:'NW' };
+  const CARD_COLOR = { 0:'#ff6b6b', 180:'#ff6b6b' }; // N and S red, rest white
+
+  for (let offset = -AR.FOV_H * 1.1; offset <= AR.FOV_H * 1.1; offset += 5) {
+    const bearing = ((heading + offset) % 360 + 360) % 360;
+    const snapped = Math.round(bearing / 5) * 5 % 360;
+    if (Math.abs(((bearing - snapped + 180) % 360) - 180) > 2) continue;
 
     const x      = canvas.width / 2 + offset * pixPerDeg;
-    const isCard  = nearestFive % 45 === 0;
-    const isMajor = nearestFive % 10 === 0;
+    if (x < 0 || x > canvas.width) continue;
 
-    ctx.strokeStyle = isCard ? '#fff' : (isMajor ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)');
+    const isCard  = snapped % 45 === 0;
+    const isMajor = snapped % 10 === 0;
+    const tickLen = isCard   ? rulerH * 0.72
+                  : isMajor  ? rulerH * 0.48
+                  :            rulerH * 0.25;
+
+    ctx.strokeStyle = isCard  ? (CARD_COLOR[snapped] || '#fff')
+                    : isMajor ? 'rgba(255,255,255,0.55)'
+                    :           'rgba(255,255,255,0.25)';
     ctx.lineWidth   = isCard ? 2 : 1;
-    const tH        = isCard ? tickH : (isMajor ? tickH * 0.65 : tickH * 0.35);
-
     ctx.beginPath();
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, y0 + tH);
+    ctx.moveTo(x, tickTop);
+    ctx.lineTo(x, tickTop + tickLen);
     ctx.stroke();
 
     if (isCard) {
-      ctx.fillStyle = '#fff';
-      ctx.font      = `bold ${Math.max(10, Math.round(canvas.height * 0.028))}px sans-serif`;
+      ctx.fillStyle = CARD_COLOR[snapped] || '#fff';
+      ctx.font      = `bold ${cardFntSz}px sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(CARDS[nearestFive], x, yLabel);
+      ctx.textBaseline = 'top';
+      ctx.fillText(CARDS[snapped], x, tickTop + rulerH * 0.72 + 2);
+      ctx.textBaseline = 'alphabetic';
     }
   }
 
-  // Centre heading readout (amber = absolute/north-locked, orange = relative)
-  const dir      = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  const relSuffix = AR.useRelative ? '  REL' : '';
-  const label    = `${dir[Math.round(heading / 22.5) % 16]}  ${Math.round(heading)}°${relSuffix}`;
-  ctx.fillStyle = AR.useRelative ? '#ff9f43' : '#f0c040';
-  ctx.font      = `bold ${Math.max(12, Math.round(canvas.height * 0.032))}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.fillText(label, canvas.width / 2, Math.round(canvas.height * 0.03));
+  // Large central heading readout
+  const dir       = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const dirLabel  = dir[Math.round(heading / 22.5) % 16];
+  const relSuffix = AR.useRelative ? ' REL' : '';
+  const headLabel = `${dirLabel}  ${Math.round(heading)}°${relSuffix}`;
+  ctx.fillStyle    = AR.useRelative ? '#ff9f43' : '#f0c040';
+  ctx.font         = `bold ${headFntSz}px monospace`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(headLabel, canvas.width / 2, tickTop / 2);
+  ctx.textBaseline = 'alphabetic';
+
+  // Elevation readout (right side of heading strip)
+  if (AR.elevation !== null) {
+    const elevLabel = `${AR.elevation >= 0 ? '+' : ''}${Math.round(AR.elevation)}°`;
+    ctx.fillStyle  = 'rgba(255,255,255,0.6)';
+    ctx.font       = `${Math.max(11, Math.round(canvas.height * 0.025))}px monospace`;
+    ctx.textAlign  = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('↑ ' + elevLabel, canvas.width - 10, tickTop / 2);
+    ctx.textBaseline = 'alphabetic';
+  }
 
   ctx.restore();
 }
@@ -879,50 +948,81 @@ function _drawPlanets(ctx, canvas, date, lat, lon) {
   }
 }
 
-// ─── Sun drawing ──────────────────────────────────────────────────────────────
+// ─── Sun drawing (PhotoPills-style: large disk + radiating rays) ──────────────
 function _drawSun(ctx, x, y, alt, canvas) {
-  const r   = Math.max(14, Math.round(canvas.width * 0.045));
-  const fnt = Math.max(10, Math.round(canvas.height * 0.025));
+  const r   = Math.max(22, Math.round(canvas.width * 0.058));
+  const fnt = Math.max(11, Math.round(canvas.height * 0.026));
+  const col = alt > 0 ? '#FFD700' : '#FF8C00';
   ctx.save();
-  const grd = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2.2);
-  grd.addColorStop(0, alt > 0 ? 'rgba(255,220,50,0.55)' : 'rgba(255,100,0,0.45)');
+
+  // Outer atmospheric glow
+  const grd = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 3.2);
+  grd.addColorStop(0, alt > 0 ? 'rgba(255,230,80,0.45)' : 'rgba(255,120,0,0.38)');
   grd.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grd;
   ctx.beginPath();
-  ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+  ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle   = alt > 0 ? '#FFD700' : '#FF6600';
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth   = 2;
+
+  // Radiating rays (PhotoPills style)
+  ctx.strokeStyle = col;
+  ctx.lineCap     = 'round';
+  for (let i = 0; i < 16; i++) {
+    const angle  = (i * Math.PI * 2) / 16;
+    const inner  = r * 1.32;
+    const outer  = r * (i % 2 === 0 ? 2.1 : 1.72);
+    ctx.lineWidth = i % 2 === 0 ? Math.max(2, r * 0.1) : Math.max(1, r * 0.06);
+    ctx.globalAlpha = i % 2 === 0 ? 0.9 : 0.6;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner);
+    ctx.lineTo(x + Math.cos(angle) * outer, y + Math.sin(angle) * outer);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.lineCap     = 'butt';
+
+  // Sun disk
+  ctx.fillStyle   = col;
+  ctx.strokeStyle = alt > 0 ? 'rgba(255,255,180,0.9)' : 'rgba(255,200,80,0.8)';
+  ctx.lineWidth   = 2.5;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  _drawChip(ctx, x, y - r - 6, `☀ ${alt.toFixed(1)}°`, fnt, '#FFD700', 'rgba(0,0,0,0.6)');
+
+  // Label
+  _drawChip(ctx, x, y - r * 2.3, `☀  ${alt.toFixed(1)}°`, fnt, '#FFD700', 'rgba(0,0,0,0.72)');
   ctx.restore();
 }
 
-// ─── Moon drawing ─────────────────────────────────────────────────────────────
+// ─── Moon drawing (PhotoPills-style: large disk with glow halo) ───────────────
 function _drawMoon(ctx, x, y, alt, canvas) {
-  const r      = Math.max(12, Math.round(canvas.width * 0.038));
-  const fnt    = Math.max(10, Math.round(canvas.height * 0.025));
+  const r      = Math.max(18, Math.round(canvas.width * 0.048));
+  const fnt    = Math.max(11, Math.round(canvas.height * 0.026));
   const illum  = Math.round(SunCalc.getMoonIllumination(_getARDate()).fraction * 100);
+  const moonColor = alt > 0 ? 'rgba(215,232,255,0.96)' : 'rgba(140,140,175,0.82)';
   ctx.save();
-  const grd = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2);
-  grd.addColorStop(0, 'rgba(180,210,255,0.35)');
+
+  // Outer halo glow
+  const grd = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 2.8);
+  grd.addColorStop(0, 'rgba(180,210,255,0.38)');
   grd.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grd;
   ctx.beginPath();
-  ctx.arc(x, y, r * 2, 0, Math.PI * 2);
+  ctx.arc(x, y, r * 2.8, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle   = alt > 0 ? 'rgba(200,220,255,0.92)' : 'rgba(130,130,160,0.75)';
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth   = 2;
+
+  // Moon disk
+  ctx.fillStyle   = moonColor;
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth   = 2.5;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  _drawChip(ctx, x, y - r - 6, `☽ ${alt.toFixed(1)}°  ${illum}%`, fnt, '#a8d8ea', 'rgba(0,0,0,0.6)');
+
+  // Label
+  _drawChip(ctx, x, y - r * 2.0, `☽  ${alt.toFixed(1)}°  ${illum}%`, fnt, '#a8d8ea', 'rgba(0,0,0,0.72)');
   ctx.restore();
 }
 
@@ -935,7 +1035,7 @@ function _drawChip(ctx, cx, y, text, fontSize, textColor, bgColor) {
   const ry = y - h;
   ctx.fillStyle = bgColor;
   ctx.beginPath();
-  ctx.roundRect(rx, ry, w, h, 5);
+  _roundRect(ctx, rx, ry, w, h, 5);
   ctx.fill();
   ctx.fillStyle    = textColor;
   ctx.textAlign    = 'center';
@@ -963,7 +1063,7 @@ function _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt) {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.beginPath();
-  ctx.roundRect(8, by, canvas.width - 16, boxH, 10);
+  _roundRect(ctx, 8, by, canvas.width - 16, boxH, 10);
   ctx.fill();
   ctx.font      = `${fnt}px sans-serif`;
   ctx.fillStyle = '#e6edf3';
