@@ -3,15 +3,17 @@
 // Uses:  getUserMedia (rear camera)  +  DeviceOrientationEvent (compass/tilt)
 
 const AR = {
-  stream:        null,
-  animFrame:     null,
-  heading:       null,   // degrees 0–360, 0 = North
-  elevation:     null,   // camera tilt above horizon in degrees
-  FOV_H:         62,     // horizontal field-of-view (degrees) — typical rear camera
-  FOV_V:         46,     // vertical field-of-view
-  useAbsolute:   false,  // true once deviceorientationabsolute gives valid data
-  useRelative:   false,  // Android fallback: treat relative alpha as north-ref after timeout
-  compassTimer:  null,   // fallback timer handle
+  stream:          null,
+  animFrame:       null,
+  heading:         null,   // degrees 0–360, 0 = North
+  elevation:       null,   // camera tilt above horizon in degrees
+  FOV_H:           62,     // horizontal field-of-view (degrees) — typical rear camera
+  FOV_V:           46,     // vertical field-of-view
+  useAbsolute:     false,  // true once deviceorientationabsolute gives valid data
+  useRelative:     false,  // Android fallback: treat relative alpha as north-ref after timeout
+  compassTimer:    null,   // fallback timer handle
+  calibrateTimer:  null,   // calibration-prompt timer handle
+  absEventSeen:    false,  // true if deviceorientationabsolute has fired at least once
   layers: { sun: true, moon: true, mw: true, planets: true, path: true, grid: true },
 };
 
@@ -84,11 +86,13 @@ function closeARView() {
   document.body.classList.remove('modal-open');
   _stopCamera();
   _stopOrientation();
-  if (AR.animFrame)    { cancelAnimationFrame(AR.animFrame); AR.animFrame = null; }
-  if (AR.compassTimer) { clearTimeout(AR.compassTimer);      AR.compassTimer = null; }
+  if (AR.animFrame)      { cancelAnimationFrame(AR.animFrame); AR.animFrame      = null; }
+  if (AR.compassTimer)   { clearTimeout(AR.compassTimer);      AR.compassTimer   = null; }
+  if (AR.calibrateTimer) { clearTimeout(AR.calibrateTimer);    AR.calibrateTimer = null; }
   AR.heading = AR.elevation = null;
-  AR.useAbsolute = false;
-  AR.useRelative = false;
+  AR.useAbsolute  = false;
+  AR.useRelative  = false;
+  AR.absEventSeen = false;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -105,10 +109,16 @@ async function _startCamera() {
       break;
     } catch (e) {
       if (c === constraints[constraints.length - 1]) {
-        const msg = e.name === 'NotAllowedError'  ? 'Camera permission denied.' :
-                    e.name === 'NotFoundError'     ? 'No camera found on this device.' :
-                    e.name === 'NotReadableError'  ? 'Camera is in use by another app.' :
-                    'Camera unavailable: ' + (e.message || e.name);
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+                      navigator.standalone === true;
+        const msg = e.name === 'NotAllowedError'
+          ? (isPWA
+              ? 'Camera permission denied. Go to device Settings → Apps → PhotoPlanner → Permissions and enable Camera.'
+              : 'Camera permission denied. Tap the camera icon in the address bar to allow access.')
+          : e.name === 'NotFoundError'     ? 'No camera found on this device.'
+          : e.name === 'NotReadableError'  ? 'Camera is in use by another app — close it and retry.'
+          : e.name === 'OverconstrainedError' ? 'Camera resolution not supported — retrying…'
+          : 'Camera unavailable: ' + (e.message || e.name);
         showToast(msg, 'danger');
         closeARView();
         return;
@@ -144,8 +154,10 @@ function _getScreenAngle() {
 
 // ─── Orientation ──────────────────────────────────────────────────────────────
 function _onOrientationAbsolute(e) {
-  // Only lock out the fallback once we have valid absolute data.
-  // On Android the event fires with alpha=null until a magnetic fix is acquired.
+  AR.absEventSeen = true;
+  // Only mark as absolute once we actually have valid compass data.
+  // Samsung/Android fires the event immediately with alpha=null until the
+  // magnetometer acquires a fix (requires device calibration via figure-8).
   if (e.alpha != null || e.webkitCompassHeading != null) {
     AR.useAbsolute = true;
   }
@@ -158,6 +170,16 @@ function _onOrientation(e) {
   // iOS: webkitCompassHeading is always north-referenced — use it directly.
   if (e.webkitCompassHeading != null) {
     _processOrientation(e, false);
+    return;
+  }
+
+  // Some Samsung/Android browsers dispatch absolute orientation through the regular
+  // deviceorientation event with e.absolute === true instead of the dedicated
+  // deviceorientationabsolute event. Treat these as absolute compass readings.
+  if (e.absolute === true && e.alpha != null) {
+    AR.absEventSeen = true;
+    AR.useAbsolute = true;
+    _processOrientation(e, true);
     return;
   }
 
@@ -206,28 +228,42 @@ function _processOrientation(e, isAbsolute) {
 }
 
 function _startOrientation() {
+  AR.absEventSeen = false;
   window.addEventListener('deviceorientationabsolute', _onOrientationAbsolute, true);
   window.addEventListener('deviceorientation',         _onOrientation,         true);
 
-  // After 4 s with no heading signal, enable relative-alpha fallback so that
-  // Android browsers without absolute-orientation support (Firefox, older
+  // After 2 s: if the absolute sensor is firing but alpha is still null, the
+  // magnetometer needs calibration (common on Samsung Galaxy devices out of the box).
+  AR.calibrateTimer = setTimeout(() => {
+    AR.calibrateTimer = null;
+    if (AR.absEventSeen && AR.heading === null) {
+      showToast(
+        'Compass needs calibration — slowly rotate the device in a figure-8 pattern.',
+        'warning'
+      );
+    }
+  }, 2000);
+
+  // After 6 s with no heading signal at all, enable relative-alpha fallback so
+  // that Android browsers without absolute-orientation support (Firefox, older
   // Samsung Internet) still get a usable — though not north-locked — compass.
   AR.compassTimer = setTimeout(() => {
     AR.compassTimer = null;
     if (AR.heading === null && !AR.useAbsolute) {
       AR.useRelative = true;
       showToast(
-        'No absolute compass. Using relative orientation — rotate the device once to calibrate.',
+        'No absolute compass. Using relative orientation — rotate the device once to set North.',
         'warning'
       );
     }
-  }, 4000);
+  }, 6000);
 }
 
 function _stopOrientation() {
   window.removeEventListener('deviceorientationabsolute', _onOrientationAbsolute, true);
   window.removeEventListener('deviceorientation',         _onOrientation,         true);
-  if (AR.compassTimer) { clearTimeout(AR.compassTimer); AR.compassTimer = null; }
+  if (AR.compassTimer)   { clearTimeout(AR.compassTimer);   AR.compassTimer   = null; }
+  if (AR.calibrateTimer) { clearTimeout(AR.calibrateTimer); AR.calibrateTimer = null; }
 }
 
 // ─── Draw loop ────────────────────────────────────────────────────────────────
@@ -261,7 +297,10 @@ function _drawFrame() {
     return;
   }
   if (AR.heading === null) {
-    _drawMessage(ctx, canvas, 'Waiting for compass…\nPoint device at the horizon\n(ensure motion & orientation access is allowed)');
+    const hint = AR.absEventSeen
+      ? 'Compass calibrating…\nRotate device in a figure-8 pattern\nthen point at the horizon'
+      : 'Waiting for compass…\nPoint device at the horizon\nEnsure Motion & Orientation access is allowed';
+    _drawMessage(ctx, canvas, hint);
     return;
   }
 
@@ -773,7 +812,7 @@ function _updateStatusBar() {
   const el = document.getElementById('ar-status');
   if (!el) return;
   if (AR.heading === null) {
-    el.textContent = 'No compass signal';
+    el.textContent = AR.absEventSeen ? 'Calibrating compass…' : 'No compass signal';
     return;
   }
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];

@@ -1,7 +1,7 @@
 // ─── PhotoPlanner Service Worker ─────────────────────────────────────────────
 // Cache-first for app shell, network-first for map tiles.
 
-const CACHE_NAME = 'photoplanner-v2';
+const CACHE_NAME = 'photoplanner-v3';
 
 // App shell: everything needed to run offline
 const APP_SHELL = [
@@ -72,7 +72,8 @@ self.addEventListener('fetch', event => {
 
 // ─── Strategy helpers ─────────────────────────────────────────────────────────
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
+  // ignoreSearch: versioned URLs (?v=abc123) still match unversioned cache entries
+  const cached = await caches.match(request, { ignoreSearch: true });
   if (cached) return cached;
   try {
     const response = await fetch(request);

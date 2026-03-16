@@ -1368,8 +1368,10 @@ button:hover { background: #2ea043; }
 /* Date + time control strip (just below top HUD, shifted down by safe-area on notch devices) */
 .ar-hud-datetime {
   position: absolute;
-  top: 44px;
-  padding-top: env(safe-area-inset-top, 0px);
+  /* On plain screens top HUD is ~44px tall. On notched/Dynamic-Island devices
+     the HUD absorbs the safe-area in its own padding, so we must add the same
+     inset here so the datetime strip stays below the HUD on all devices. */
+  top: max(44px, calc(env(safe-area-inset-top, 0px) + 44px));
   left: 0;
   right: 0;
   display: flex;
