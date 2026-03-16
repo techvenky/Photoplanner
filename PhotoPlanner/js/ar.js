@@ -15,6 +15,8 @@ const AR = {
   calibrateTimer:  null,   // calibration-prompt timer handle
   absEventSeen:    false,  // true if deviceorientationabsolute has fired at least once
   absNullCount:    0,      // consecutive null-alpha absolute events (high = permission blocked)
+  smoothHeading:   null,  // EMA-filtered heading (degrees)
+  smoothElevation: null,  // EMA-filtered elevation (degrees)
   layers: { sun: true, moon: true, mw: true, planets: true, path: true, grid: true },
 };
 
@@ -91,10 +93,12 @@ function closeARView() {
   if (AR.compassTimer)   { clearTimeout(AR.compassTimer);      AR.compassTimer   = null; }
   if (AR.calibrateTimer) { clearTimeout(AR.calibrateTimer);    AR.calibrateTimer = null; }
   AR.heading = AR.elevation = null;
-  AR.useAbsolute  = false;
-  AR.useRelative  = false;
-  AR.absEventSeen = false;
-  AR.absNullCount = 0;
+  AR.useAbsolute    = false;
+  AR.useRelative    = false;
+  AR.absEventSeen   = false;
+  AR.absNullCount   = 0;
+  AR.smoothHeading  = null;
+  AR.smoothElevation = null;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -204,6 +208,7 @@ function _processOrientation(e, isAbsolute) {
   // Both webkitCompassHeading (iOS) and alpha (Android) report the direction of
   // the device's physical top (Y-axis). Subtracting the screen rotation gives
   // the direction the camera lens is actually facing.
+  // EMA smoothing (α=0.25) removes sensor jitter while keeping fast response.
   let rawHeading = null;
   if (e.webkitCompassHeading != null) {
     rawHeading = e.webkitCompassHeading;           // iOS: true magnetic north, CW
@@ -211,7 +216,17 @@ function _processOrientation(e, isAbsolute) {
     rawHeading = (360 - e.alpha + 360) % 360;      // Android absolute: alpha=0 → North
   }
   if (rawHeading !== null) {
-    AR.heading = (rawHeading - screenAngle + 360) % 360;
+    const adjusted = (rawHeading - screenAngle + 360) % 360;
+    if (AR.smoothHeading === null) {
+      AR.smoothHeading = adjusted;
+    } else {
+      // Wraparound-safe EMA: interpolate the shortest arc
+      let diff = adjusted - AR.smoothHeading;
+      while (diff >  180) diff -= 360;
+      while (diff < -180) diff += 360;
+      AR.smoothHeading = (AR.smoothHeading + diff * 0.25 + 360) % 360;
+    }
+    AR.heading = AR.smoothHeading;
   }
 
   // ── Elevation ───────────────────────────────────────────────────────────────
@@ -220,16 +235,25 @@ function _processOrientation(e, isAbsolute) {
   // Landscape: gamma controls up-down tilt (left-right tilt in portrait).
   //   Landscape-CW (90°):  elevation = −gamma
   //   Landscape-CCW (270°): elevation =  gamma
+  let rawElev = null;
   if (screenAngle === 0 || screenAngle === 180) {
     if (e.beta != null) {
       const beta = screenAngle === 0 ? e.beta : -e.beta;
-      AR.elevation = Math.min(90, Math.max(-90, 90 - beta));
+      rawElev = Math.min(90, Math.max(-90, 90 - beta));
     }
   } else {
     if (e.gamma != null) {
       const gamma = screenAngle === 90 ? -e.gamma : e.gamma;
-      AR.elevation = Math.min(90, Math.max(-90, gamma));
+      rawElev = Math.min(90, Math.max(-90, gamma));
     }
+  }
+  if (rawElev !== null) {
+    if (AR.smoothElevation === null) {
+      AR.smoothElevation = rawElev;
+    } else {
+      AR.smoothElevation += (rawElev - AR.smoothElevation) * 0.25;
+    }
+    AR.elevation = AR.smoothElevation;
   }
 }
 
@@ -338,6 +362,7 @@ function _drawFrame() {
   // ── Draw layers bottom-up ────────────────────────────────────────────────────
   if (AR.layers.grid)    _drawElevationGrid(ctx, canvas);
   _drawHorizon(ctx, canvas);
+  _drawCrosshair(ctx, canvas);
   if (AR.layers.path) {
     _drawCelestialPath(ctx, canvas,
       (d, la, lo) => SunCalc.getPosition(d, la, lo), 'rgba(255,200,50,0.45)');
@@ -351,14 +376,20 @@ function _drawFrame() {
 
   const sunXY  = _project(sunAz,  sunAlt,  canvas);
   const moonXY = _project(moonAz, moonAlt, canvas);
-  if (AR.layers.sun  && sunXY)  _drawSun(ctx,  sunXY.x,  sunXY.y,  sunAlt,  canvas);
-  if (AR.layers.moon && moonXY) _drawMoon(ctx, moonXY.x, moonXY.y, moonAlt, canvas);
+  if (AR.layers.sun) {
+    if (sunXY)  _drawSun(ctx, sunXY.x, sunXY.y, sunAlt, canvas);
+    else        _drawOffScreenArrow(ctx, canvas, sunAz,  sunAlt,  '#FFD700',            '☀');
+  }
+  if (AR.layers.moon) {
+    if (moonXY) _drawMoon(ctx, moonXY.x, moonXY.y, moonAlt, canvas);
+    else        _drawOffScreenArrow(ctx, canvas, moonAz, moonAlt, 'rgba(180,220,255,1)', '☽');
+  }
 
   _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt);
 }
 
 // ─── Projection: (azimuth°, altitude°) → canvas (x, y) ───────────────────────
-function _project(az, alt, canvas, clipFrac = 0.75) {
+function _project(az, alt, canvas, clipFrac = 0.95) {
   let dAz = az - AR.heading;
   while (dAz >  180) dAz -= 360;
   while (dAz < -180) dAz += 360;
@@ -366,12 +397,120 @@ function _project(az, alt, canvas, clipFrac = 0.75) {
   const camElev = AR.elevation != null ? AR.elevation : 0;
   const dAlt = alt - camElev;
 
-  if (Math.abs(dAz)  > AR.FOV_H * clipFrac) return null;
-  if (Math.abs(dAlt) > AR.FOV_V * clipFrac) return null;
+  // When device tilt is not tracked (elevation === null), allow a much wider
+  // vertical clip so objects at high altitude are still rendered on-screen.
+  const altClipFrac = AR.elevation !== null ? clipFrac : 1.8;
+
+  if (Math.abs(dAz)  > AR.FOV_H * clipFrac)    return null;
+  if (Math.abs(dAlt) > AR.FOV_V * altClipFrac) return null;
 
   const x = canvas.width  / 2 + (dAz  / (AR.FOV_H / 2)) * (canvas.width  / 2);
   const y = canvas.height / 2 - (dAlt / (AR.FOV_V / 2)) * (canvas.height / 2);
   return { x, y };
+}
+
+// ─── Viewfinder crosshair ─────────────────────────────────────────────────────
+function _drawCrosshair(ctx, canvas) {
+  const cx = canvas.width  / 2;
+  const cy = canvas.height / 2;
+  const s  = Math.max(16, canvas.width * 0.03);
+  const gap = 5;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - s, cy); ctx.lineTo(cx - gap, cy);
+  ctx.moveTo(cx + gap, cy); ctx.lineTo(cx + s, cy);
+  ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy - gap);
+  ctx.moveTo(cx, cy + gap); ctx.lineTo(cx, cy + s);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Corner bracket guides
+  const bx = s * 1.8, by2 = s * 1.8, bl = s * 0.6;
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth   = 1;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([dx, dy]) => {
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * bx,        cy + dy * by2);
+    ctx.lineTo(cx + dx * (bx - bl), cy + dy * by2);
+    ctx.moveTo(cx + dx * bx,        cy + dy * by2);
+    ctx.lineTo(cx + dx * bx,        cy + dy * (by2 - bl));
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+// ─── Off-screen direction arrow ───────────────────────────────────────────────
+// Draws an arrow at the screen edge pointing toward a celestial object that is
+// outside the current camera FOV.  Mirrors the PhotoPills edge-indicator UX.
+function _drawOffScreenArrow(ctx, canvas, az, alt, color, symbol) {
+  if (AR.heading === null) return;
+
+  let dAz = az - AR.heading;
+  while (dAz >  180) dAz -= 360;
+  while (dAz < -180) dAz += 360;
+
+  const camElev = AR.elevation != null ? AR.elevation : 0;
+  const dAlt    = alt - camElev;
+
+  // Normalised screen-space direction
+  const nx = dAz  / (AR.FOV_H / 2);
+  const ny = -dAlt / (AR.FOV_V / 2);
+  const len = Math.sqrt(nx * nx + ny * ny);
+  if (len < 0.001) return; // already at centre — drawn normally
+
+  const margin = Math.max(32, canvas.width * 0.07);
+  const hw = canvas.width  / 2 - margin;
+  const hh = canvas.height / 2 - margin;
+  const ux = nx / len, uy = ny / len;
+
+  // Intersect the unit-direction with the inset rectangle boundary
+  let t = Infinity;
+  if (Math.abs(ux) > 0.001) t = Math.min(t, hw / (Math.abs(ux) * canvas.width  / 2));
+  if (Math.abs(uy) > 0.001) t = Math.min(t, hh / (Math.abs(uy) * canvas.height / 2));
+  if (!isFinite(t)) return;
+
+  const ex = canvas.width  / 2 + ux * t * canvas.width  / 2;
+  const ey = canvas.height / 2 + uy * t * canvas.height / 2;
+
+  const r           = Math.max(14, canvas.width * 0.032);
+  const arrowAngle  = Math.atan2(uy, ux);
+
+  ctx.save();
+  ctx.translate(ex, ey);
+
+  // Dark backing circle
+  ctx.fillStyle = 'rgba(0,0,0,0.62)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Arrow triangle pointing outward toward the object
+  ctx.fillStyle = color;
+  ctx.rotate(arrowAngle);
+  ctx.beginPath();
+  ctx.moveTo( r * 0.9,  0);
+  ctx.lineTo(-r * 0.45, -r * 0.55);
+  ctx.lineTo(-r * 0.45,  r * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.rotate(-arrowAngle);
+
+  // Symbol label below the arrow circle
+  const fnt = Math.max(10, Math.round(canvas.height * 0.022));
+  ctx.font         = `bold ${fnt}px sans-serif`;
+  ctx.fillStyle    = color;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(symbol, 0, r * 1.35);
+
+  ctx.restore();
 }
 
 // ─── Elevation grid ───────────────────────────────────────────────────────────
@@ -563,8 +702,11 @@ function _drawGalacticCenter(ctx, canvas, date, lat, lon) {
   const alt = toDeg(gc.altitude);
   if (alt < -10) return;
 
-  const pt = _project(az, alt, canvas, 0.9);
-  if (!pt) return;
+  const pt = _project(az, alt, canvas, 0.95);
+  if (!pt) {
+    _drawOffScreenArrow(ctx, canvas, az, alt, '#c678dd', '🌌');
+    return;
+  }
 
   const r   = Math.max(10, Math.round(canvas.width * 0.022));
   const fnt = Math.max(9,  Math.round(canvas.height * 0.022));
@@ -707,8 +849,11 @@ function _drawPlanets(ctx, canvas, date, lat, lon) {
     try { pos = _solvePlanetAzAlt(name, date, lat, lon); } catch (_) { continue; }
     if (pos.alt < -10) continue;
 
-    const pt = _project(pos.az, pos.alt, canvas, 0.9);
-    if (!pt) continue;
+    const pt = _project(pos.az, pos.alt, canvas, 0.95);
+    if (!pt) {
+      _drawOffScreenArrow(ctx, canvas, pos.az, pos.alt, pl.color, pl.symbol);
+      continue;
+    }
 
     ctx.save();
     // Glow
