@@ -157,6 +157,18 @@ async function build() {
   const jsSavings = (100 * (1 - minJsKb / origJsKb)).toFixed(1);
   const jsHash    = contentHash(result.code);
 
+  // ── 1b. Stamp sw.js CACHE_NAME with JS bundle hash ────────────────────────
+  // This forces the browser to install a new service worker on every deploy,
+  // so the old cache is always evicted and fresh assets are served.
+  const swPath = path.join(__dirname, 'sw.js');
+  let swContent = fs.readFileSync(swPath, 'utf8');
+  swContent = swContent.replace(
+    /const CACHE_NAME = 'photoplanner-[^']*'/,
+    `const CACHE_NAME = 'photoplanner-${jsHash}'`
+  );
+  fs.writeFileSync(swPath, swContent, 'utf8');
+  console.log(pc.dim(`  sw.js CACHE_NAME → photoplanner-${jsHash}`));
+
   // ── 2. Minify CSS ──────────────────────────────────────────────────────────
   console.log(pc.cyan('\nMinifying CSS...'));
   const cssSource  = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');

@@ -76,7 +76,10 @@
     });
     // When a new service worker takes over (after a deploy), reload so the
     // page gets fresh assets instead of running old cached JS.
+    let _swReloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (_swReloading) return;
+      _swReloading = true;
       window.location.reload();
     });
   }
