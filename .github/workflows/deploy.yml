@@ -39,6 +39,12 @@ jobs:
         run: npm run build
         working-directory: PhotoPlanner
 
+      - name: Remove dev dependencies before packaging
+        # node_modules is only needed for the build step; exclude it from the
+        # Pages artifact to keep the deployment small and fast.
+        run: rm -rf node_modules
+        working-directory: PhotoPlanner
+
       - name: Configure Pages
         uses: actions/configure-pages@v4
 
