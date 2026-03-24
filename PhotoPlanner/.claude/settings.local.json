@@ -4,5 +4,18 @@
       "Bash(node -e \":*)",
       "Bash(npm install:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm test"
+          }
+        ]
+      }
+    ]
   }
 }
