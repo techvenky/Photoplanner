@@ -1681,7 +1681,8 @@ button:hover { background: #2ea043; }
   text-align: center;
 }
 
-.ar-close {
+.ar-close,
+.ar-capture {
   flex-shrink: 0;
   font-size: 0.8rem;
   padding: 0.2rem 0.6rem;

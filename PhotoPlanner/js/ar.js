@@ -18,7 +18,19 @@ const AR = {
   absNullCount:    0,      // consecutive null-alpha absolute events (high = permission blocked)
   smoothHeading:   null,  // EMA-filtered heading (degrees)
   smoothElevation: null,  // EMA-filtered elevation (degrees)
-  layers: { sun: true, moon: true, mw: true, planets: true, path: true, grid: true },
+  layers: { sun: true, moon: true, mw: true, planets: true, path: true, grid: true, target: true },
+  // Cache: avoids recomputing expensive astronomy on every animation frame.
+  // astroKey / planetsKey invalidate when date+location changes (or per 5-min bucket for planets).
+  _cache: {
+    astroKey:     null,
+    sunPathPts:   null,   // [{az,alt}] at 10-min steps across the day
+    moonPathPts:  null,
+    sunLabels:    null,   // [{az,alt,label}] at 60-min steps
+    moonLabels:   null,
+    riseSetData:  null,   // { times, moonTimes }
+    planetsKey:   null,
+    planetsData:  null,   // [{name, az, alt, pl}]
+  },
 };
 
 // ─── AR Date/Time ─────────────────────────────────────────────────────────────
@@ -103,6 +115,11 @@ function closeARView() {
   AR.smoothHeading  = null;
   AR.smoothElevation = null;
   AR.tiltOffset     = 0;
+  AR._cache.astroKey    = null;
+  AR._cache.planetsKey  = null;
+  AR._cache.sunPathPts  = AR._cache.moonPathPts  = null;
+  AR._cache.sunLabels   = AR._cache.moonLabels   = null;
+  AR._cache.riseSetData = AR._cache.planetsData  = null;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -261,6 +278,55 @@ function _processOrientation(e, isAbsolute) {
   }
 }
 
+// ─── Astronomy cache builders ─────────────────────────────────────────────────
+// _buildAstroCache: computes all daily path points, labels, and rise/set times once
+// per unique date+location, so _drawFrame does zero SunCalc calls for paths/rise-set.
+function _buildAstroCache(date, lat, lon) {
+  const base = new Date(date);
+  base.setHours(0, 0, 0, 0);
+
+  const sunPts = [], sunLabels = [], moonPts = [], moonLabels = [];
+
+  for (let m = 0; m <= 1440; m += 10) {
+    const d  = new Date(base.getTime() + m * 60000);
+    const sp = SunCalc.getPosition(d, lat, lon);
+    const mp = SunCalc.getMoonPosition(d, lat, lon);
+    const saz  = (toDeg(sp.azimuth) + 180 + 360) % 360;
+    const salt = toDeg(sp.altitude);
+    const maz  = (toDeg(mp.azimuth) + 180 + 360) % 360;
+    const malt = toDeg(mp.altitude);
+    sunPts.push({ az: saz, alt: salt });
+    moonPts.push({ az: maz, alt: malt });
+    if (m % 60 === 0) {
+      const h = d.getHours();
+      const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+      sunLabels.push({ az: saz, alt: salt, label });
+      moonLabels.push({ az: maz, alt: malt, label });
+    }
+  }
+
+  AR._cache.sunPathPts  = sunPts;
+  AR._cache.moonPathPts = moonPts;
+  AR._cache.sunLabels   = sunLabels;
+  AR._cache.moonLabels  = moonLabels;
+  AR._cache.riseSetData = {
+    times:     SunCalc.getTimes(date, lat, lon),
+    moonTimes: SunCalc.getMoonTimes(date, lat, lon),
+  };
+}
+
+// _buildPlanetsCache: runs the Kepler solver once per 5-minute bucket instead of per frame.
+function _buildPlanetsCache(date, lat, lon) {
+  const data = [];
+  for (const [name, pl] of Object.entries(_PLANET_ELEMS)) {
+    try {
+      const pos = _solvePlanetAzAlt(name, date, lat, lon);
+      data.push({ name, az: pos.az, alt: pos.alt, pl });
+    } catch (_) {}
+  }
+  AR._cache.planetsData = data;
+}
+
 function _startOrientation() {
   AR.absEventSeen = false;
   window.addEventListener('deviceorientationabsolute', _onOrientationAbsolute, true);
@@ -405,6 +471,19 @@ function _drawFrame() {
   const date = _getARDate();
   const lat  = state.currentLat, lon = state.currentLon;
 
+  // ── Refresh astronomy caches (near-zero cost when key is unchanged) ──────────
+  const astroKey = `${lat.toFixed(4)},${lon.toFixed(4)},${date.toDateString()}`;
+  if (AR._cache.astroKey !== astroKey) {
+    AR._cache.astroKey = astroKey;
+    _buildAstroCache(date, lat, lon);
+  }
+  // Planet positions update every 5-minute bucket (planets barely move in 5 min)
+  const planetsKey = `${lat.toFixed(4)},${lon.toFixed(4)},${Math.floor(date.getTime() / 300000)}`;
+  if (AR._cache.planetsKey !== planetsKey) {
+    AR._cache.planetsKey = planetsKey;
+    _buildPlanetsCache(date, lat, lon);
+  }
+
   const sunPos  = SunCalc.getPosition(date, lat, lon);
   const moonPos = SunCalc.getMoonPosition(date, lat, lon);
   const sunAz   = (toDeg(sunPos.azimuth)  + 180 + 360) % 360;
@@ -418,24 +497,25 @@ function _drawFrame() {
   _drawCrosshair(ctx, canvas);
 
   // ── 2. Orbital path arcs with hourly time labels (PhotoPills style) ──────────
-  if (AR.layers.path) {
+  if (AR.layers.path && AR._cache.sunPathPts) {
     try {
       _drawCelestialPath(ctx, canvas,
-        (d, la, lo) => SunCalc.getPosition(d, la, lo),
-        'rgba(255,200,50,0.55)', AR.layers.sun ? '#FFD700' : null);
+        AR._cache.sunPathPts,  'rgba(255,200,50,0.55)',
+        AR.layers.sun ? '#FFD700' : null, AR._cache.sunLabels);
       _drawCelestialPath(ctx, canvas,
-        (d, la, lo) => SunCalc.getMoonPosition(d, la, lo),
-        'rgba(150,200,255,0.45)', AR.layers.moon ? 'rgba(170,220,255,0.95)' : null);
+        AR._cache.moonPathPts, 'rgba(150,200,255,0.45)',
+        AR.layers.moon ? 'rgba(170,220,255,0.95)' : null, AR._cache.moonLabels);
     } catch (e) { console.warn('AR: celestial path draw failed', e); }
   }
 
   // ── 3. Compass ruler — moved BEFORE celestial objects so it always renders ───
   _drawCompassRuler(ctx, canvas);
-  try { _drawRiseSetOnRuler(ctx, canvas, date, lat, lon); } catch (e) { console.warn('AR: rise/set ruler failed', e); }
+  try { _drawRiseSetOnRuler(ctx, canvas); } catch (e) { console.warn('AR: rise/set ruler failed', e); }
 
   // ── 4. Celestial objects — each isolated so one crash can't block the rest ───
   if (AR.layers.mw)      { try { _drawGalacticCenter(ctx, canvas, date, lat, lon); } catch (e) { console.warn('AR: galactic center failed', e); } }
-  if (AR.layers.planets) { try { _drawPlanets(ctx, canvas, date, lat, lon);        } catch (e) { console.warn('AR: planets failed', e); } }
+  if (AR.layers.planets) { try { _drawPlanets(ctx, canvas);                        } catch (e) { console.warn('AR: planets failed', e); } }
+  if (AR.layers.target)  { try { _drawTargetMarker(ctx, canvas);                   } catch (e) { console.warn('AR: target marker failed', e); } }
 
   const sunXY  = _project(sunAz,  sunAlt,  canvas);
   const moonXY = _project(moonAz, moonAlt, canvas);
@@ -652,35 +732,47 @@ function _drawElevationGrid(ctx, canvas) {
   ctx.restore();
 }
 
-// ─── Horizon line ─────────────────────────────────────────────────────────────
+// ─── Horizon line (with atmospheric gradient band) ────────────────────────────
 function _drawHorizon(ctx, canvas) {
   const camElev = (AR.elevation != null ? AR.elevation : 0) + AR.tiltOffset;
   const y = canvas.height / 2 + (camElev / (AR.FOV_V / 2)) * (canvas.height / 2);
+  if (y < -50 || y > canvas.height + 50) return;
 
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+
+  // Atmospheric glow band centred on the horizon
+  const bandH = Math.max(24, canvas.height * 0.09);
+  const grd = ctx.createLinearGradient(0, y - bandH, 0, y + bandH * 0.5);
+  grd.addColorStop(0,   'rgba(80,160,255,0)');
+  grd.addColorStop(0.35, 'rgba(80,160,255,0.07)');
+  grd.addColorStop(0.6,  'rgba(255,210,120,0.10)');
+  grd.addColorStop(1,   'rgba(255,130,60,0)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, y - bandH, canvas.width, bandH * 1.5);
+
+  // Dashed horizon line
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
   ctx.lineWidth   = 1.5;
   ctx.setLineDash([10, 8]);
   ctx.beginPath();
   ctx.moveTo(0, y);
   ctx.lineTo(canvas.width, y);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font      = `${Math.max(11, Math.round(canvas.height * 0.025))}px sans-serif`;
   ctx.setLineDash([]);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font      = `${Math.max(11, Math.round(canvas.height * 0.025))}px sans-serif`;
   ctx.fillText('— horizon —', 10, y - 4);
   ctx.restore();
 }
 
 // ─── Celestial path arcs (sun or moon trajectory across the day) ──────────────
-// labelColor: if provided, draws hourly time stamps along the arc (PhotoPills style)
-function _drawCelestialPath(ctx, canvas, getSunCalcPos, color, labelColor) {
-  const lat  = state.currentLat, lon = state.currentLon;
-  const date = _getARDate();
-  const base = new Date(date);
-  base.setHours(0, 0, 0, 0);
+// pts: [{az,alt}] pre-computed array (10-min steps).
+// labelColor / labelPts: if provided, draws hourly time stamps (PhotoPills style).
+function _drawCelestialPath(ctx, canvas, pts, color, labelColor, labelPts) {
+  if (!pts || pts.length === 0) return;
 
-  // Draw smooth arc (finer 10-minute steps)
+  // Draw smooth arc
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth   = 2;
@@ -688,13 +780,9 @@ function _drawCelestialPath(ctx, canvas, getSunCalcPos, color, labelColor) {
 
   let lastPt = null;
   ctx.beginPath();
-  for (let m = 0; m <= 1440; m += 10) {
-    const d   = new Date(base.getTime() + m * 60000);
-    const pos = getSunCalcPos(d, lat, lon);
-    const az  = (toDeg(pos.azimuth) + 180 + 360) % 360;
-    const alt =  toDeg(pos.altitude);
-    if (alt < -5) { lastPt = null; continue; }
-    const pt = _project(az, alt, canvas, 1.0);
+  for (const p of pts) {
+    if (p.alt < -5) { lastPt = null; continue; }
+    const pt = _project(p.az, p.alt, canvas, 1.0);
     if (!pt) { lastPt = null; continue; }
     if (!lastPt) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
     lastPt = pt;
@@ -703,19 +791,12 @@ function _drawCelestialPath(ctx, canvas, getSunCalcPos, color, labelColor) {
   ctx.restore();
 
   // Hourly time stamps along arc (PhotoPills style)
-  if (!labelColor) return;
+  if (!labelColor || !labelPts) return;
   const fnt = Math.max(9, Math.round(canvas.height * 0.019));
-  for (let m = 0; m <= 1440; m += 60) {
-    const d   = new Date(base.getTime() + m * 60000);
-    const pos = getSunCalcPos(d, lat, lon);
-    const az  = (toDeg(pos.azimuth) + 180 + 360) % 360;
-    const alt =  toDeg(pos.altitude);
-    if (alt < -2) continue;
-    const pt = _project(az, alt, canvas, 0.88);
+  for (const p of labelPts) {
+    if (p.alt < -2) continue;
+    const pt = _project(p.az, p.alt, canvas, 0.88);
     if (!pt) continue;
-
-    const h = d.getHours();
-    const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
 
     // Dot on arc
     ctx.save();
@@ -726,8 +807,80 @@ function _drawCelestialPath(ctx, canvas, getSunCalcPos, color, labelColor) {
     ctx.restore();
 
     // Time chip above dot
-    _drawChip(ctx, pt.x, pt.y - 10, label, fnt, labelColor, 'rgba(0,0,0,0.68)');
+    _drawChip(ctx, pt.x, pt.y - 10, p.label, fnt, labelColor, 'rgba(0,0,0,0.68)');
   }
+}
+
+// ─── Target location marker ───────────────────────────────────────────────────
+// Shows the user's planned subject as a cyan marker with bearing + distance.
+// The target is projected at altitude 0° (on the horizon plane).
+function _drawTargetMarker(ctx, canvas) {
+  if (state.targetLat === null || state.targetLon === null) return;
+  if (state.currentLat === null || AR.heading === null) return;
+
+  const az    = _bearingTo(state.currentLat, state.currentLon, state.targetLat, state.targetLon);
+  const color = '#00e5ff';
+  const r     = Math.max(12, Math.round(canvas.width * 0.025));
+  const pt    = _project(az, 0, canvas);
+
+  if (!pt) {
+    _drawOffScreenArrow(ctx, canvas, az, 0, color, '🎯');
+    return;
+  }
+
+  ctx.save();
+
+  // Glow
+  const grd = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r * 2.5);
+  grd.addColorStop(0, 'rgba(0,229,255,0.45)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(pt.x, pt.y, r * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Target circle
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath();
+  ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner crosshair
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(pt.x - r * 0.5, pt.y); ctx.lineTo(pt.x + r * 0.5, pt.y);
+  ctx.moveTo(pt.x, pt.y - r * 0.5); ctx.lineTo(pt.x, pt.y + r * 0.5);
+  ctx.stroke();
+
+  // Chip: bearing + distance
+  const dist = _haversineKm(state.currentLat, state.currentLon, state.targetLat, state.targetLon);
+  const distStr = dist < 1 ? `${(dist * 1000).toFixed(0)}m` : `${dist.toFixed(1)}km`;
+  const fnt = Math.max(9, Math.round(canvas.height * 0.022));
+  _drawChip(ctx, pt.x, pt.y - r - 4, `🎯 ${Math.round(az)}°  ${distStr}`, fnt, color, 'rgba(0,0,0,0.68)');
+
+  ctx.restore();
+}
+
+// Returns true bearing (degrees, 0=N CW) from point 1 to point 2.
+function _bearingTo(lat1, lon1, lat2, lon2) {
+  const D2R = Math.PI / 180;
+  const φ1  = lat1 * D2R, φ2 = lat2 * D2R;
+  const Δλ  = (lon2 - lon1) * D2R;
+  const y   = Math.sin(Δλ) * Math.cos(φ2);
+  const x   = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// Haversine great-circle distance in kilometres.
+function _haversineKm(lat1, lon1, lat2, lon2) {
+  const R   = 6371;
+  const D2R = Math.PI / 180;
+  const dLat = (lat2 - lat1) * D2R;
+  const dLon = (lon2 - lon1) * D2R;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * D2R) * Math.cos(lat2 * D2R) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ─── Compass direction badge (PhotoPills-style circle at bottom centre) ────────
@@ -873,11 +1026,11 @@ function _drawCompassRuler(ctx, canvas) {
 }
 
 // ─── Rise / Set markers on the compass ruler ──────────────────────────────────
-function _drawRiseSetOnRuler(ctx, canvas, date, lat, lon) {
-  if (AR.heading === null) return;
+function _drawRiseSetOnRuler(ctx, canvas) {
+  if (AR.heading === null || !AR._cache.riseSetData) return;
 
-  const times     = SunCalc.getTimes(date, lat, lon);
-  const moonTimes = SunCalc.getMoonTimes(date, lat, lon);
+  const { times, moonTimes } = AR._cache.riseSetData;
+  const lat = state.currentLat, lon = state.currentLon;
   const pixPerDeg = canvas.width / AR.FOV_H;
   const fntSz     = Math.max(9, Math.round(canvas.height * 0.021));
 
@@ -1062,18 +1215,17 @@ function _solvePlanetAzAlt(name, date, lat, lon) {
   return { az: azR * R2D, alt: altR * R2D };
 }
 
-function _drawPlanets(ctx, canvas, date, lat, lon) {
+function _drawPlanets(ctx, canvas) {
+  if (!AR._cache.planetsData) return;
   const fnt = Math.max(9, Math.round(canvas.height * 0.022));
   const r   = Math.max(5, Math.round(canvas.width  * 0.012));
 
-  for (const [name, pl] of Object.entries(_PLANET_ELEMS)) {
-    let pos;
-    try { pos = _solvePlanetAzAlt(name, date, lat, lon); } catch (_) { continue; }
-    if (pos.alt < -10) continue;
+  for (const { name, az, alt, pl } of AR._cache.planetsData) {
+    if (alt < -10) continue;
 
-    const pt = _project(pos.az, pos.alt, canvas);
+    const pt = _project(az, alt, canvas);
     if (!pt) {
-      _drawOffScreenArrow(ctx, canvas, pos.az, pos.alt, pl.color, pl.symbol);
+      _drawOffScreenArrow(ctx, canvas, az, alt, pl.color, pl.symbol);
       continue;
     }
 
@@ -1096,7 +1248,7 @@ function _drawPlanets(ctx, canvas, date, lat, lon) {
     ctx.stroke();
     // Label
     _drawChip(ctx, pt.x, pt.y - r - 4,
-      `${pl.symbol} ${name.slice(0, 3)}  ${pos.alt.toFixed(1)}°`, fnt, pl.color, 'rgba(0,0,0,0.65)');
+      `${pl.symbol} ${name.slice(0, 3)}  ${alt.toFixed(1)}°`, fnt, pl.color, 'rgba(0,0,0,0.65)');
     ctx.restore();
   }
 }
@@ -1263,6 +1415,33 @@ function _drawMessage(ctx, canvas, msg) {
   ctx.restore();
 }
 
+// ─── Screenshot capture ───────────────────────────────────────────────────────
+// Composites the live video frame and the AR canvas overlay into a single PNG download.
+function _captureARView() {
+  const video  = document.getElementById('ar-video');
+  const arCanvas = document.getElementById('ar-canvas');
+  if (!arCanvas) return;
+
+  const out = document.createElement('canvas');
+  out.width  = arCanvas.width  || window.innerWidth;
+  out.height = arCanvas.height || window.innerHeight;
+  const ctx  = out.getContext('2d');
+
+  // Draw the camera frame first, scaled to canvas size
+  if (video && video.readyState >= 2) {
+    try { ctx.drawImage(video, 0, 0, out.width, out.height); } catch (_) {}
+  }
+  // Overlay the AR canvas
+  ctx.drawImage(arCanvas, 0, 0);
+
+  const url = out.toDataURL('image/png');
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = `PhotoPlanner_AR_${new Date().toISOString().slice(0,19).replace(/[T:]/g,'-')}.png`;
+  a.click();
+  showToast('AR snapshot saved.', 'success');
+}
+
 // ─── FOV slider ───────────────────────────────────────────────────────────────
 function _initFOVSlider() {
   const sl  = document.getElementById('ar-fov-slider');
@@ -1303,10 +1482,12 @@ function _initARTimeControls() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 function initAR() {
-  const openBtn  = document.getElementById('ar-view-btn');
-  const closeBtn = document.getElementById('ar-close-btn');
-  if (openBtn)  openBtn.addEventListener('click', openARView);
-  if (closeBtn) closeBtn.addEventListener('click', closeARView);
+  const openBtn    = document.getElementById('ar-view-btn');
+  const closeBtn   = document.getElementById('ar-close-btn');
+  const captureBtn = document.getElementById('ar-capture-btn');
+  if (openBtn)    openBtn.addEventListener('click', openARView);
+  if (closeBtn)   closeBtn.addEventListener('click', closeARView);
+  if (captureBtn) captureBtn.addEventListener('click', _captureARView);
   _initFOVSlider();
   _initARTimeControls();
 }
