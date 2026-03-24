@@ -135,7 +135,9 @@ function initLocationControls() {
 
   // Use My Location buttons
   ['my-location-btn', 'sm-use-location', 'mw-use-location'].forEach(id => {
-    document.getElementById(id).addEventListener('click', () => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
       if (!navigator.geolocation) { showToast('Geolocation not supported by this browser.', 'warning'); return; }
       navigator.geolocation.getCurrentPosition(
         pos => { setLocation(pos.coords.latitude, pos.coords.longitude, 'My Location'); },

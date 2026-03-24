@@ -42,7 +42,9 @@ function showToast(msg, type = 'info') {
   const el = document.createElement('div');
   el.style.cssText = `background:${bg};color:#fff;padding:0.6rem 1rem;border-radius:8px;font-size:0.84rem;box-shadow:0 4px 16px rgba(0,0,0,0.45);opacity:0;transition:opacity 0.2s;word-break:break-word;pointer-events:auto;max-width:300px;`;
   el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
+  const container = document.getElementById('toast-container');
+  if (!container) { console.warn('showToast: #toast-container not found', msg); return; }
+  container.appendChild(el);
   requestAnimationFrame(() => { el.style.opacity = '1'; });
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 250); }, 3500);
 }
@@ -89,10 +91,12 @@ function getAdaptiveDot() {
   return 90 * 360 / (256 * Math.pow(2, zoom));
 }
 
-// Returns arc radius in degrees that maps to ~200px at current zoom (for sun/moon arc)
+// Returns arc radius in degrees that maps to ~200px at current zoom (for sun/moon arc).
+// Capped at 2° (~222 km) so the arc never dominates the screen when zoomed out.
 function getAdaptiveArcR() {
   const zoom = state.map ? state.map.getZoom() : 8;
-  return 200 * 360 / (256 * Math.pow(2, zoom));
+  const r = 200 * 360 / (256 * Math.pow(2, zoom));
+  return Math.min(r, 2.0);
 }
 
 // Returns a ray length in degrees that extends well past the map viewport edges

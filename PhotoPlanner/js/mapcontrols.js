@@ -1,5 +1,13 @@
 // ─── Map Controls: Compass Rose, Moon Viewer, Analog Clock ───────────────────
 
+// ── Fixed star positions for moon viewer (avoids flicker from Math.random on every frame) ──
+// Each entry: [x%, y%, radius (0=small, 1=large)]
+const _MOON_STARS = [
+  [8,9,0],[82,14,1],[19,55,0],[91,62,0],[6,38,1],[94,45,0],
+  [52,8,0],[38,78,0],[72,28,1],[22,84,0],[47,19,0],[63,70,0],
+  [15,70,0],[78,45,1],
+];
+
 // ── Moon photograph preload ───────────────────────────────────────────────────
 let _moonImg       = null;
 let _moonImgLoaded = false;
@@ -156,10 +164,9 @@ function _drawMoonCanvas(canvas, phase, fraction, moonAlt, moonAz, sunAlt, isVis
   if (sunAlt < -5) {
     const op = Math.min(0.9, (-sunAlt - 5) / 15);
     ctx.fillStyle = `rgba(255,255,255,${op})`;
-    [[8,9],[82,14],[19,55],[91,62],[6,38],[94,45],[52,8],[38,78],[72,28],[22,84],[47,19],[63,70],[15,70],[78,45]].forEach(([sx,sy]) => {
-      const sr = Math.random() < 0.2 ? 1.1 : 0.65;
+    _MOON_STARS.forEach(([sx, sy, large]) => {
       ctx.beginPath();
-      ctx.arc(sx * W / 100, sy * H / 100, sr, 0, Math.PI * 2);
+      ctx.arc(sx * W / 100, sy * H / 100, large ? 1.1 : 0.65, 0, Math.PI * 2);
       ctx.fill();
     });
   }
@@ -215,7 +222,7 @@ function _drawMoonCanvas(canvas, phase, fraction, moonAlt, moonAz, sunAlt, isVis
 }
 
 // ── Not-visible state ─────────────────────────────────────────────────────────
-function _drawNotVisible(ctx, W, H, fraction, moonAlt) {
+function _drawNotVisible(ctx, W, H, fraction, _moonAlt) {
   // Deep dark sky
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#070c14');
@@ -302,7 +309,7 @@ function _drawSkyBg(ctx, W, H, sunAlt) {
 }
 
 // ── Realistic moon renderer ───────────────────────────────────────────────────
-function _drawRealisticMoon(ctx, cx, cy, r, phase, fraction) {
+function _drawRealisticMoon(ctx, cx, cy, r, phase, _fraction) {
   const SHADOW = '#040710';
 
   ctx.save();
@@ -582,9 +589,13 @@ function initMapTimeBar() {
   }
 
   // ── Slider input ──────────────────────────────────────────────────────────
-  slider.addEventListener('input', () => {
-    onTimeChange(parseInt(slider.value));
-  });
+  // 'input' fires continuously on modern browsers during touch drag.
+  // 'change' fires on drag-end on older Samsung Internet / WebKit.
+  // touchmove ensures the map updates on every touch frame even when 'input' is
+  // throttled by the browser (common on mid-range Android devices).
+  slider.addEventListener('input',     () => onTimeChange(parseInt(slider.value)));
+  slider.addEventListener('change',    () => onTimeChange(parseInt(slider.value)));
+  slider.addEventListener('touchmove', () => onTimeChange(parseInt(slider.value)), { passive: true });
 
   // ── Tell CSS how tall the time bar is so the timeline sits above it ─────────
   if (bar) {
@@ -602,8 +613,7 @@ function initMapTimeBar() {
 
   // ── Initial label draw + progress fill ───────────────────────────────────
   const _initMins = parseInt(slider.value) || 360;
-  onTimeChange(_initMins);
-  _updateBarLabel(label, status, _initMins);
+  onTimeChange(_initMins);  // internally calls _updateBarLabel — no second call needed
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

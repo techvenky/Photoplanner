@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
+    "test": "node tests/unit.js",
     "dev": "node dev.js",
     "icons": "node generate-icons.js"
   },

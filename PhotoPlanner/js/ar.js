@@ -739,7 +739,9 @@ function _drawCompassBadge(ctx, canvas) {
 
   const r  = Math.max(28, Math.round(canvas.width * 0.065));
   const cx = canvas.width / 2;
-  const cy = canvas.height - r - Math.round(canvas.height * 0.06);
+  // Keep badge clear of the HTML bottom-HUD strip (~80px) plus a gap above it
+  const hudH = Math.max(80, Math.round(canvas.height * 0.14));
+  const cy = canvas.height - hudH - r - 8;
 
   ctx.save();
 
@@ -1208,14 +1210,17 @@ function _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt) {
   const moonLine = `${phase} ${moonAlt.toFixed(0)}°`;
 
   const badgeR  = Math.max(28, Math.round(canvas.width * 0.065));
-  const badgeCY = canvas.height - badgeR - Math.round(canvas.height * 0.06);
-  // Place chips at the same vertical level as the compass badge, flanking it
-  const cy = badgeCY;
+  const hudH    = Math.max(80, Math.round(canvas.height * 0.14));
+  const badgeCY = canvas.height - hudH - badgeR - 8;
+  // _drawChip draws from (cx, y) where y is the chip BOTTOM.
+  // To centre chips at badge centre, pass badgeCY + half chip height.
+  const chipHalfH = fnt / 2 + 4;
+  const chipY  = badgeCY + chipHalfH;
   const margin = badgeR * 2.2 + 8;
 
   ctx.save();
-  _drawChip(ctx, margin,                    cy, sunLine,  fnt, '#FFD700',             'rgba(0,0,0,0.62)');
-  _drawChip(ctx, canvas.width - margin, cy, moonLine, fnt, 'rgba(180,220,255,0.95)', 'rgba(0,0,0,0.62)');
+  _drawChip(ctx, margin,                    chipY, sunLine,  fnt, '#FFD700',              'rgba(0,0,0,0.62)');
+  _drawChip(ctx, canvas.width - margin, chipY, moonLine, fnt, 'rgba(180,220,255,0.95)', 'rgba(0,0,0,0.62)');
   ctx.restore();
 }
 

@@ -110,12 +110,11 @@ function drawSunPath() {
 
   // Milky Way galactic centre arc (visible during astronomical night)
   if (document.getElementById('show-milkyway').checked) {
-    const dateNow = getSelectedDate();
-    const times = SunCalc.getTimes(dateNow, state.currentLat, state.currentLon);
+    const times = SunCalc.getTimes(date, state.currentLat, state.currentLon);
     const mwPoints = [];
     let gcPeak = null; // { point, alt, time } — highest altitude GC moment during night
     for (let h = 0; h <= 24; h += 0.1) {
-      const d = new Date(dateNow);
+      const d = new Date(date);
       d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
       const sunPos = SunCalc.getPosition(d, state.currentLat, state.currentLon);
       const mwPos  = getGalacticCenterPos(d, state.currentLat, state.currentLon);
