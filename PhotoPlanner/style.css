@@ -200,12 +200,56 @@ input:focus, select:focus {
 
 #plan-time-slider {
   width: 100%;
-  accent-color: #e3b341;
   cursor: pointer;
-  height: 4px;
+  height: 6px;
   padding: 0;
+  margin: 10px 0 4px;
   border: none;
-  background: none;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  /* gradient fill: left of thumb = blue, right = dark — updated via JS --progress */
+  background: linear-gradient(to right, #58a6ff var(--progress, 25%), #2d333b var(--progress, 25%));
+  border-radius: 3px;
+}
+/* webkit track must be transparent so the input's gradient shows through */
+#plan-time-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+  border-radius: 3px;
+}
+#plan-time-slider::-moz-range-track {
+  height: 6px;
+  background: #2d333b;
+  border-radius: 3px;
+}
+#plan-time-slider::-moz-range-progress {
+  height: 6px;
+  background: #58a6ff;
+  border-radius: 3px;
+}
+#plan-time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #58a6ff;
+  cursor: pointer;
+  margin-top: -7px;
+  box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.25);
+  transition: box-shadow 0.15s;
+}
+#plan-time-slider:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 7px rgba(88, 166, 255, 0.35);
+}
+#plan-time-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #58a6ff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.25);
 }
 
 .time-ticks {
@@ -467,10 +511,10 @@ button:hover { background: #2ea043; }
 /* ── Timeline Overlay ──────────────────────────────────────────────────────── */
 .timeline-overlay {
   position: absolute;
-  bottom: 0;
+  bottom: var(--time-bar-h, 68px);
   left: 0;
   right: 0;
-  z-index: 500;
+  z-index: 520;
   background: rgba(10, 14, 20, 0.93);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -556,6 +600,151 @@ button:hover { background: #2ea043; }
   text-align: center;
 }
 
+/* ── Event Cards Bar ──────────────────────────────────────────────────────── */
+.tl-events-bar {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  border-bottom: 1px solid #1c2333;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: rgba(8, 11, 18, 0.97);
+}
+.tl-events-bar::-webkit-scrollbar { display: none; }
+
+.tl-event-card {
+  flex-shrink: 0;
+  padding: 0.35rem 0.55rem;
+  min-width: 78px;
+  border-right: 1px solid rgba(48, 54, 61, 0.4);
+  cursor: pointer;
+  transition: filter 0.15s;
+  text-align: center;
+  user-select: none;
+}
+.tl-event-card:hover { filter: brightness(1.3); }
+
+.tl-event-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-event-time {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #e6edf3;
+  white-space: nowrap;
+}
+.tl-event-az {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 0.08rem;
+}
+.tl-event-extra {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.38);
+  margin-top: 0.05rem;
+  white-space: nowrap;
+}
+
+/* Type-specific backgrounds matching sky colors */
+.tl-event-card--astro    { background: #03080e; }
+.tl-event-card--nautical { background: #080d28; }
+.tl-event-card--civil    { background: #0c1840; }
+.tl-event-card--sunrise  { background: #4a2a00; }
+.tl-event-card--sunset   { background: #4a2a00; }
+.tl-event-card--golden   { background: #2e1c00; }
+.tl-event-card--transit  { background: #18243a; }
+.tl-event-card--moon     { background: #0c1522; }
+
+/* Active card (current period) */
+.tl-event-card.active {
+  outline: 1px solid rgba(227, 179, 65, 0.7);
+  outline-offset: -1px;
+}
+.tl-event-card--sunrise.active,
+.tl-event-card--sunset.active  { background: #6a3c00; }
+.tl-event-card--golden.active  { background: #442800; }
+.tl-event-card--transit.active { background: #243452; }
+.tl-event-card--astro.active   { background: #07101c; }
+.tl-event-card--nautical.active{ background: #0e1840; }
+.tl-event-card--civil.active   { background: #142260; }
+.tl-event-card--moon.active    { background: #122030; }
+
+/* Photography tip popup */
+.tl-event-tip-popup {
+  position: fixed;
+  background: #1c2333;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  max-width: 272px;
+  z-index: 9999;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+}
+.tl-event-tip-title {
+  font-weight: 700;
+  font-size: 0.83rem;
+  color: #e6edf3;
+  margin-bottom: 0.35rem;
+}
+.tl-event-tip-desc {
+  font-size: 0.73rem;
+  color: #8b949e;
+  margin-bottom: 0.45rem;
+  line-height: 1.45;
+}
+.tl-event-tip-photo-label {
+  font-size: 0.67rem;
+  color: #e3b341;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+.tl-event-tip-photo-text {
+  font-size: 0.7rem;
+  color: #adbac7;
+  line-height: 1.45;
+}
+
+/* Chart hover tooltip (fixed position) */
+.tl-chart-tooltip {
+  position: fixed;
+  background: rgba(22, 27, 34, 0.96);
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  pointer-events: none;
+  z-index: 600;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.tl-chart-tooltip-time {
+  font-weight: 700;
+  color: #e6edf3;
+  margin-bottom: 0.2rem;
+  text-align: center;
+}
+.tl-chart-tooltip-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: #8b949e;
+  margin-top: 0.1rem;
+}
+.tl-chart-tooltip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 /* Scrollable chart area */
 .tl-chart-wrap {
   overflow-x: auto;
@@ -631,6 +820,92 @@ button:hover { background: #2ea043; }
   color: #484f58;
   margin-left: auto;
   white-space: nowrap;
+}
+
+/* ── Map Layer Extra Buttons ──────────────────────────────────────────────── */
+.map-layer-btn--free { border-color: rgba(88, 166, 255, 0.35) !important; }
+.map-layer-btn--tf   { border-color: rgba(227, 179, 65, 0.35) !important; }
+.tf-key-hint {
+  font-size: 0.62rem;
+  color: #6e7681;
+  margin-top: 0.3rem;
+  line-height: 1.4;
+}
+.tf-key-hint a { color: #e3b341; }
+
+/* ── Compass Rose Control ─────────────────────────────────────────────────── */
+.map-compass-ctrl {
+  background: transparent;
+  border: none;
+  cursor: default;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
+}
+
+/* ── Moon Viewer Control ──────────────────────────────────────────────────── */
+.map-moon-ctrl {
+  background: rgba(10, 14, 20, 0.88);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  min-width: 96px;
+}
+.moon-ctrl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.4rem 0.2rem 0.5rem;
+  border-bottom: 1px solid #21262d;
+}
+.moon-ctrl-label {
+  font-size: 0.65rem;
+  color: #8b949e;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.moon-ctrl-toggle {
+  background: none;
+  border: none;
+  color: #8b949e;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0 0.1rem;
+  line-height: 1;
+}
+.moon-ctrl-toggle:hover { color: #e6edf3; }
+.moon-ctrl-canvas {
+  display: block;
+  width: 140px;
+  height: 140px;
+}
+.moon-ctrl-info {
+  font-size: 0.6rem;
+  color: #8b949e;
+  text-align: center;
+  padding: 0.2rem 0.4rem 0.28rem;
+  border-top: 1px solid #21262d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* ── Map Clock Control ───────────────────────────────────────────────────── */
+.map-clock-ctrl {
+  background: rgba(8, 11, 18, 0.88);
+  border: 1.5px solid rgba(88, 166, 255, 0.55);
+  border-radius: 50%;
+  padding: 3px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+#analog-clock-canvas {
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
 }
 
 /* SUN & MOON */
@@ -1107,7 +1382,7 @@ button:hover { background: #2ea043; }
 
 /* ── Mobile-only elements (hidden on desktop) ─────────────────────────────── */
 .sidebar-drag-handle  { display: none; }
-.mobile-map-fab       { display: none; }
+.mobile-map-fab       { display: none; flex-shrink: 0; }
 .mobile-sidebar-backdrop { display: none; }
 
 /* ── Desktop-only elements (hidden on mobile) ─────────────────────────────── */
@@ -1200,23 +1475,22 @@ button:hover { background: #2ea043; }
   }
 
   /* FAB "Controls" button on map */
+  /* FAB lives inside the time bar header — inline flex item, no absolute positioning */
   .mobile-map-fab {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    position: absolute;
-    top: 12px; right: 12px;
-    z-index: 700;
+    gap: 0.3rem;
+    flex-shrink: 0;
     background: rgba(22, 27, 34, 0.92);
-    border: 1px solid #30363d;
+    border: 1px solid #58a6ff;
     color: #e6edf3;
-    font-size: 0.8rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 22px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    min-height: 0;
+    font-size: 0.78rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 20px;
+    cursor: pointer;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 0 0 1px rgba(88,166,255,0.3);
   }
 
   /* Backdrop */
@@ -1416,19 +1690,25 @@ button:hover { background: #2ea043; }
 /* Date + time control strip (just below top HUD, shifted down by safe-area on notch devices) */
 .ar-hud-datetime {
   position: absolute;
-  /* On plain screens top HUD is ~44px tall. On notched/Dynamic-Island devices
-     the HUD absorbs the safe-area in its own padding, so we must add the same
-     inset here so the datetime strip stays below the HUD on all devices. */
-  top: max(44px, calc(env(safe-area-inset-top, 0px) + 44px));
+  /* Explicit 48px fallback covers Samsung status bar which doesn't expose safe-area-inset-top */
+  top: max(48px, calc(env(safe-area-inset-top, 0px) + 48px));
   left: 0;
   right: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.3rem 0.9rem;
-  background: rgba(0,0,0,0.48);
-  backdrop-filter: blur(4px);
+  padding: 0.4rem 0.9rem;
+  background: rgba(0,0,0,0.58);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 10;
+  min-height: 40px;
+}
+
+.ar-time-prefix {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .ar-date-input {
@@ -1460,7 +1740,7 @@ button:hover { background: #2ea043; }
   text-align: right;
 }
 
-/* Bottom HUD: layer toggles (left) + FOV calibration (right) — inset for home bar */
+/* Bottom HUD: layer toggles (left) + FOV + tilt calibration (right) — inset for home bar */
 .ar-hud-bottom-controls {
   position: absolute;
   bottom: 0;
@@ -1469,10 +1749,56 @@ button:hover { background: #2ea043; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem max(0.9rem, env(safe-area-inset-right, 0px)) max(0.6rem, env(safe-area-inset-bottom, 0px)) max(0.9rem, env(safe-area-inset-left, 0px));
-  background: rgba(0,0,0,0.52);
-  backdrop-filter: blur(4px);
+  gap: 0.5rem;
+  padding: 0.45rem max(0.9rem, env(safe-area-inset-right, 0px)) max(0.7rem, env(safe-area-inset-bottom, 0px)) max(0.9rem, env(safe-area-inset-left, 0px));
+  background: rgba(0,0,0,0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 10;
+}
+
+.ar-right-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+
+.ar-tilt-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ar-tilt-label {
+  font-size: 0.68rem;
+  color: #8b949e;
+  margin-right: 2px;
+}
+
+.ar-tilt-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  color: #e6edf3;
+  font-size: 0.7rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.ar-tilt-btn:active { background: rgba(255,255,255,0.25); }
+
+.ar-tilt-offset {
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: #f0c040;
+  min-width: 30px;
+  text-align: center;
 }
 
 /* Layer toggle buttons */
@@ -1510,11 +1836,12 @@ button:hover { background: #2ea043; }
 }
 
 .ar-fov-label-txt {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #8b949e;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
 .ar-fov-slider {
@@ -1705,4 +2032,157 @@ input[type="range"],
   .about-features-grid { grid-template-columns: 1fr; }
   .about-tech-grid { grid-template-columns: repeat(2, 1fr); }
   .info-modal-body { padding: 0.9rem 1rem 1.2rem; }
+}
+
+/* ── Bottom Map Time Bar — unified single slider ──────────────────────────── */
+.map-time-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 510;
+  padding: 0.45rem 1rem 0.5rem;
+  background: rgba(8, 11, 18, 0.93);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(48, 54, 61, 0.8);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Timeline sits above the time bar via --time-bar-h CSS var (set by JS at init) */
+
+.map-time-bar-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Header row: time label + sky phase + hint */
+.map-time-bar-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 4px;
+}
+
+.map-time-bar-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f0f6fc;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.map-time-bar-status {
+  font-size: 0.72rem;
+  color: #8b949e;
+  white-space: nowrap;
+}
+
+.map-time-bar-hint {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: #484f58;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Sky-gradient slider track */
+.map-time-bar-slider {
+  width: 100%;
+  height: 7px;
+  padding: 0;
+  margin: 0 0 4px;
+  border: none;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 4px;
+  cursor: pointer;
+  /* Sky-time gradient — progress fill is injected as inline style by JS */
+  background: linear-gradient(
+    to right,
+    #03080e   0%,    /* midnight */
+    #03080e   8%,
+    #080d28  14%,   /* nautical */
+    #0c2868  18%,   /* civil / blue hour */
+    #c8780a  25%,   /* sunrise */
+    #f4c542  31%,   /* golden */
+    #93a8c8  37%,   /* day */
+    #93a8c8  63%,
+    #f4c542  69%,   /* golden */
+    #c8780a  75%,   /* sunset */
+    #0c2868  82%,   /* civil dusk */
+    #080d28  86%,   /* nautical */
+    #03080e  92%,   /* astro */
+    #03080e 100%
+  );
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  touch-action: pan-x;
+}
+
+/* Webkit track — transparent so gradient shows */
+.map-time-bar-slider::-webkit-slider-runnable-track {
+  height: 7px;
+  border-radius: 4px;
+  background: transparent;
+}
+
+/* Webkit thumb */
+.map-time-bar-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #58a6ff;
+  cursor: pointer;
+  margin-top: -7.5px;
+  box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.map-time-bar-slider:active::-webkit-slider-thumb {
+  border-color: #f78166;
+  box-shadow: 0 0 0 7px rgba(247, 129, 102, 0.28), 0 2px 8px rgba(0, 0, 0, 0.5);
+  transform: scale(1.2);
+}
+
+/* Firefox track + thumb */
+.map-time-bar-slider::-moz-range-track {
+  height: 7px;
+  border-radius: 4px;
+  background: transparent;
+}
+.map-time-bar-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #58a6ff;
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Hour tick labels */
+.map-time-bar-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: #484f58;
+  padding: 0 2px;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Mobile: taller thumb for easier touch */
+@media (max-width: 768px) {
+  .map-time-bar { padding: 0.4rem 0.75rem 0.45rem; }
+  .map-time-bar-hint { display: none; } /* hide hint on small screens */
+  .map-time-bar-slider { height: 9px; margin-bottom: 5px; }
+  .map-time-bar-slider::-webkit-slider-thumb { width: 26px; height: 26px; margin-top: -9px; }
+  .map-time-bar-ticks { font-size: 0.58rem; }
 }

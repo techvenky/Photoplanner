@@ -18,6 +18,7 @@ function setLocation(lat, lon, label) {
   drawSunPath();
   updateSunMoon();
   updateMilkyWay();
+  if (typeof updateMoonViewer === 'function') updateMoonViewer();
 
   // Enable the Save Location button now that a location is set
   updateSaveBtnState();
@@ -26,12 +27,14 @@ function setLocation(lat, lon, label) {
   autoDetectTimezone(lat, lon);
   fetchWeather(lat, lon);
 
-  // Show timeline overlay when location is first set
+  // Expand timeline when location is set; always redraw event cards
   const overlay = document.getElementById('timeline-overlay');
-  if (overlay && overlay.classList.contains('collapsed')) {
-    overlay.classList.remove('collapsed');
-    const tb = document.getElementById('tl-toggle');
-    if (tb) tb.textContent = '▼';
+  if (overlay) {
+    if (overlay.classList.contains('collapsed')) {
+      overlay.classList.remove('collapsed');
+      const tb = document.getElementById('tl-toggle');
+      if (tb) tb.textContent = '▼';
+    }
     setTimeout(() => drawTimelineOverlay(false), 80);
   }
 }
@@ -92,6 +95,7 @@ async function autoDetectTimezone(lat, lon) {
 
     state.selectedTimezone = tz;
     state._tzAutoDetected  = true;
+    state.locationTz       = tz;  // persists as fallback even when user resets to "Local (Auto)"
 
     // Sync dropdown: find existing option or insert a dynamic one
     if (sel) {

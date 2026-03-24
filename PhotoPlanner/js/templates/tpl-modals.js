@@ -95,14 +95,15 @@ document.getElementById('modals-root').innerHTML = `
 
     <!-- Top HUD bar -->
     <div class="ar-hud-top">
-      <div class="ar-title">📡 AR Sky</div>
+      <div class="ar-title">Augmented Reality</div>
       <div id="ar-status" class="ar-status">—</div>
-      <button id="ar-close-btn" class="btn btn-sm btn-outline-secondary ar-close">✕</button>
+      <button id="ar-close-btn" class="btn btn-sm btn-outline-secondary ar-close">✕ Done</button>
     </div>
 
     <!-- Date + time control strip -->
     <div class="ar-hud-datetime">
       <input type="date" id="ar-date-input" class="ar-date-input" />
+      <span class="ar-time-prefix">⏱</span>
       <input type="range" id="ar-time-slider" class="ar-time-slider" min="0" max="1439" step="5" value="720" />
       <span id="ar-time-label" class="ar-time-label">12:00 PM</span>
     </div>
@@ -123,7 +124,7 @@ document.getElementById('modals-root').innerHTML = `
       </div>
     </div>
 
-    <!-- Bottom HUD: layer toggles + FOV calibration -->
+    <!-- Bottom HUD: layer toggles + FOV + horizon calibration -->
     <div class="ar-hud-bottom-controls">
       <div class="ar-layers">
         <button class="ar-layer-btn active" data-layer="sun"     title="Sun">☀</button>
@@ -133,10 +134,18 @@ document.getElementById('modals-root').innerHTML = `
         <button class="ar-layer-btn active" data-layer="path"    title="Paths">〰</button>
         <button class="ar-layer-btn active" data-layer="grid"    title="Alt grid">⊞</button>
       </div>
-      <label class="ar-fov-label-txt">FOV
-        <input type="range" id="ar-fov-slider" class="ar-fov-slider" min="30" max="100" step="1" value="62" />
-        <span id="ar-fov-label">62°</span>
-      </label>
+      <div class="ar-right-controls">
+        <label class="ar-fov-label-txt">FOV
+          <input type="range" id="ar-fov-slider" class="ar-fov-slider" min="30" max="100" step="1" value="62" />
+          <span id="ar-fov-label">62°</span>
+        </label>
+        <div class="ar-tilt-controls">
+          <span class="ar-tilt-label">Horizon</span>
+          <button id="ar-tilt-down" class="ar-tilt-btn" title="Tilt horizon down">▼</button>
+          <span id="ar-tilt-offset" class="ar-tilt-offset">0°</span>
+          <button id="ar-tilt-up"   class="ar-tilt-btn" title="Tilt horizon up">▲</button>
+        </div>
+      </div>
     </div>
   </div>
 

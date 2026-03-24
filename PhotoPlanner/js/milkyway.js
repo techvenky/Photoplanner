@@ -3,7 +3,7 @@
 function updateMilkyWay() {
   const dateStr = document.getElementById('mw-date').value;
   if (!dateStr) return;
-  const date = new Date(dateStr + 'T12:00:00');
+  const date = new Date(dateStr + 'T12:00:00Z');
 
   // Month badges — hemisphere-aware
   // Northern (lat ≥ 0): best May–Sep, good Mar–Oct

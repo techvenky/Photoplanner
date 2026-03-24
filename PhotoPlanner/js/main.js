@@ -37,42 +37,82 @@ function setMapLayer(name) {
 function initMap() {
   state.map = L.map('map').setView([40, -3], 4);
 
-  // Tile layers — OpenStreetMap / ESRI (free, no API key required)
-  const OSM_ATTR   = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-  const ESRI_ATTR  = '© <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics';
+  // Tile layers
+  const OSM_ATTR  = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const ESRI_ATTR = '© <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics';
+  const TF_ATTR   = '© <a href="https://www.thunderforest.com">Thunderforest</a>, ' + OSM_ATTR;
+  const BKG_ATTR  = '© <a href="https://www.bkg.bund.de">BKG</a> (2024), ' + OSM_ATTR;
+
   const _street    = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                        { subdomains: 'abc', attribution: OSM_ATTR, maxZoom: 19 });
   const _satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                        { attribution: ESRI_ATTR, maxZoom: 19 });
   const _terrain   = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-                       { subdomains: 'abc', attribution: OSM_ATTR + ', © OpenTopoMap', maxZoom: 17 });
-  // Labels overlay for hybrid mode (CartoDB labels-only layer, transparent background)
+                       { subdomains: 'abc', attribution: OSM_ATTR + ', © <a href="https://opentopomap.org">OpenTopoMap</a>', maxZoom: 17 });
+  // TopPlusOpen — free, no API key (BKG Germany, WMTS uses {z}/{y}/{x} order)
+  const _topplusopen = L.tileLayer('https://sgx.geodatenzentrum.de/wmts_topplus_open/tile/1.0.0/web/default/WEBMERCATOR/{z}/{y}/{x}.png',
+                         { attribution: BKG_ATTR, maxZoom: 18 });
+  // Labels overlay for hybrid mode
   state.labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
                        { subdomains: 'abcd', attribution: '© CartoDB', maxZoom: 19, opacity: 0.9 });
-  window._mapTileLayers = { street: _street, satellite: _satellite, terrain: _terrain };
+
+  // Thunderforest (free tier — API key required, get one free at thunderforest.com)
+  state.tfApiKey = localStorage.getItem('tf_api_key') || '';
+  function _makeTFLayer(style) {
+    return L.tileLayer(
+      `https://tile.thunderforest.com/${style}/{z}/{x}/{y}.png?apikey=${state.tfApiKey}`,
+      { attribution: TF_ATTR, maxZoom: 22 }
+    );
+  }
+
+  window._mapTileLayers = {
+    street: _street, satellite: _satellite, terrain: _terrain, topplusopen: _topplusopen
+  };
 
   state.activeTileLayer = _street;
   _street.addTo(state.map);
 
   document.querySelectorAll('.map-layer-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const layer = btn.dataset.layer;
+      // Thunderforest layers require an API key
+      if (layer === 'tf-landscape' || layer === 'tf-outdoors') {
+        if (!state.tfApiKey) {
+          const key = prompt('Enter your free Thunderforest API key\n(register at thunderforest.com):');
+          if (!key) return;
+          state.tfApiKey = key.trim();
+          localStorage.setItem('tf_api_key', state.tfApiKey);
+        }
+        // Build the layer on demand and register it
+        window._mapTileLayers[layer] = _makeTFLayer(layer === 'tf-landscape' ? 'landscape' : 'outdoors');
+      }
       document.querySelectorAll('.map-layer-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      setMapLayer(btn.dataset.layer);
+      setMapLayer(layer);
     });
   });
 
+  // Light pollution overlay (NASA VIIRS Night Lights — free, no API key)
+  const _lightPollution = L.tileLayer(
+    'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg',
+    { attribution: '© NASA VIIRS', maxZoom: 8, opacity: 0.7 }
+  );
+  window._mapTileLayers['light-pollution'] = _lightPollution;
+
   // Layer groups — order matters (arcs below, indicator on top)
+  state.cardinalGroup      = L.layerGroup().addTo(state.map);
+  state.distanceRingGroup  = L.layerGroup().addTo(state.map);
   state.sunPathGroup       = L.layerGroup().addTo(state.map);
   state.moonPathGroup      = L.layerGroup().addTo(state.map);
   state.keyTimesGroup      = L.layerGroup().addTo(state.map);
   state.milkyWayGroup      = L.layerGroup().addTo(state.map);
+  state.fovGroup           = L.layerGroup().addTo(state.map);
   state.targetGroup        = L.layerGroup().addTo(state.map);
   state.finderSourceGroup  = L.layerGroup().addTo(state.map);
   state.timeIndicatorGroup = L.layerGroup().addTo(state.map);
 
-  // Zoom: redraw time indicator at adaptive distance
-  state.map.on('zoomend', () => { if (state.currentLat !== null) drawTimeIndicator(); });
+  // Zoom: redraw arcs + indicator at adaptive scale
+  state.map.on('zoomend', () => { if (state.currentLat !== null) drawSunPath(); });
 
   // Map click handler
   state.map.on('click', e => {
@@ -96,25 +136,14 @@ function initMap() {
   document.getElementById('sm-date').value = today;
   document.getElementById('mw-date').value = today;
 
-  // Time slider wiring
-  const slider = document.getElementById('plan-time-slider');
-  slider.addEventListener('input', () => {
-    document.getElementById('sky-time-slider').value = slider.value;
-    updateSliderDisplay();
-    drawTimeIndicator();
-    drawSkyDomeIfOpen();
-    // Redraw timeline cursor without expensive full re-render
-    const overlay = document.getElementById('timeline-overlay');
-    if (overlay && !overlay.classList.contains('collapsed')) {
-      drawTimelineOverlay(false);
-    }
-  });
+  // Time slider is now in the bottom map bar (#plan-time-slider inside #map-time-bar)
+  // initMapTimeBar() wires it up — no duplicate listener needed here.
 
   // Sky modal slider — mirrors main slider
   document.getElementById('sky-time-slider').addEventListener('input', e => {
-    document.getElementById('plan-time-slider').value = e.target.value;
-    updateSliderDisplay();
-    drawTimeIndicator();
+    const mins = parseInt(e.target.value);
+    document.getElementById('plan-time-slider').value = mins;
+    if (window._onTimeChange) window._onTimeChange(mins);
     drawSkyDome();
   });
 
@@ -137,13 +166,18 @@ function initMap() {
   initFinderModal();
   initTimeline({
     onTimeScrub: () => {
-      drawTimeIndicator();
-      drawSkyDomeIfOpen();
+      // timeline scrub already calls window._onTimeChange directly
     }
   });
   initMobileSidebar();
   initSidebarDock();
   initInfoModals();
+
+  // Map overlay controls
+  initMapCompass();
+  initMoonViewer();
+  initAnalogClock();
+  initMapTimeBar(); // wires up the single unified bottom slider
 
   // Window resize handler
   window.addEventListener('resize', () => {

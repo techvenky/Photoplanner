@@ -28,7 +28,7 @@ function drawSunPath() {
   state.milkyWayGroup.clearLayers();
 
   const date = getSelectedDate();
-  const R = 1.5; // arc radius in degrees
+  const R = getAdaptiveArcR(); // arc radius scales with zoom (~200px on screen)
 
   if (document.getElementById('show-sun').checked) {
     // Full-day arc — split into separate segments so a below-horizon gap never
@@ -73,6 +73,17 @@ function drawSunPath() {
         L.circleMarker(pt, { color, fillColor: color, fillOpacity: 1, radius: 5, weight: 2 })
           .bindTooltip(`${label}: ${fmtTime(t)}`, { sticky: true })
           .addTo(state.keyTimesGroup);
+        // Time label floating next to dot
+        const shortName = label.replace(/[☀️🌅🌟🔵]/gu, '').trim()
+          .replace('Sunrise','SR').replace('Sunset','SS')
+          .replace('Golden Hour AM','GH↑').replace('Golden Hour PM','GH↓')
+          .replace('Blue Hour AM','BH↑').replace('Blue Hour PM','BH↓');
+        L.marker(pt, {
+          icon: L.divIcon({
+            html: `<span style="font-size:9px;color:${color};text-shadow:0 1px 3px rgba(0,0,0,0.95);background:rgba(0,0,0,0.5);padding:1px 4px;border-radius:2px;white-space:nowrap;line-height:1.4">${shortName} ${fmtTime(t)}</span>`,
+            className: '', iconAnchor: [-7, 6]
+          })
+        }).addTo(state.keyTimesGroup);
       });
     }
   }
@@ -160,6 +171,9 @@ function drawSunPath() {
   }
 
   drawTimeIndicator();
+  drawCardinalLines();
+  drawDistanceRings();
+  drawFOVCone();
 }
 
 // Draws the moving direction ray + position marker at the selected time.
@@ -169,7 +183,7 @@ function drawTimeIndicator() {
 
   const minutes = parseInt(document.getElementById('plan-time-slider').value);
   const dt = getDateAtMinutes(minutes);
-  const RAY = 4.0;           // ray extends well off-screen
+  const RAY = getAdaptiveRay(); // ray extends past viewport edges at any zoom
   const DOT = getAdaptiveDot(); // scales with zoom so icon stays ~90px from pin
 
   function drawRay(pos, color, emoji, name) {
@@ -201,6 +215,16 @@ function drawTimeIndicator() {
   if (document.getElementById('show-sun').checked) {
     const sunPos = SunCalc.getPosition(dt, state.currentLat, state.currentLon);
     drawRay(sunPos, '#e3b341', '☀️', 'Sun');
+    // Shadow direction ray (anti-sun, only when sun above horizon)
+    if (document.getElementById('show-shadow')?.checked && sunPos.altitude > 0) {
+      const shadowAz = sunPos.azimuth + Math.PI;
+      addStrokedPolyline([[state.currentLat, state.currentLon], azToLatLon(shadowAz, RAY)], {
+        color: '#6e7681', weight: 2, opacity: 0.55, dashArray: '5 7'
+      }, state.timeIndicatorGroup);
+      L.circleMarker(azToLatLon(shadowAz, DOT * 1.2), {
+        color: '#6e7681', fillColor: '#1c2028', fillOpacity: 0.9, radius: 5, weight: 1.5
+      }).bindTooltip('🌑 Shadow Direction', { sticky: true }).addTo(state.timeIndicatorGroup);
+    }
   }
   if (document.getElementById('show-moon').checked) {
     const moonPos = SunCalc.getMoonPosition(dt, state.currentLat, state.currentLon);
@@ -212,7 +236,7 @@ function drawTimeIndicator() {
     if (sunAltNow < -12 && mwPos.altitude > 0) {
       const az = mwPos.azimuth;
       const dotPt = azToLatLon(az, getAdaptiveDot());
-      const endPt = azToLatLon(az, 4.0);
+      const endPt = azToLatLon(az, RAY);
       // Glow band ray
       L.polyline([[state.currentLat, state.currentLon], endPt], { color: '#c678dd', weight: 10, opacity: 0.12 }).addTo(state.timeIndicatorGroup);
       L.polyline([[state.currentLat, state.currentLon], endPt], { color: '#c678dd', weight: 4,  opacity: 0.35 }).addTo(state.timeIndicatorGroup);
@@ -255,9 +279,11 @@ function updatePlannerInfo(dt) {
     : toDeg(sunPos.altitude) > -12 ? '🌆 Nautical twilight'
     : toDeg(sunPos.altitude) > -18 ? '🌃 Astronomical twilight'
     : '🌑 Night';
-  document.getElementById('plan-time-status').textContent = sunStatus;
+  const statusEl = document.getElementById('plan-time-status');
+  if (statusEl) statusEl.textContent = sunStatus;
 
   const panel = document.getElementById('planner-info');
+  if (!panel) return;
   panel.innerHTML = `
     <div class="info-row"><span class="info-label">☀️ Sun Az</span><span class="info-val">${sunAzDeg.toFixed(1)}°</span></div>
     <div class="info-row"><span class="info-label">☀️ Sun Alt</span><span class="info-val">${toDeg(sunPos.altitude).toFixed(1)}°</span></div>
@@ -271,4 +297,104 @@ function updatePlannerInfo(dt) {
     <div class="info-row"><span class="info-label">Moonrise</span><span class="info-val">${moonTimes.rise ? fmtTime(moonTimes.rise) : '—'}</span></div>
     <div class="info-row"><span class="info-label">Moonset</span><span class="info-val">${moonTimes.set ? fmtTime(moonTimes.set) : '—'}</span></div>
   `;
+}
+
+// ─── Cardinal direction reference lines ──────────────────────────────────────
+function drawCardinalLines() {
+  if (!state.cardinalGroup) return;
+  state.cardinalGroup.clearLayers();
+  if (!document.getElementById('show-cardinal')?.checked) return;
+  if (state.currentLat === null) return;
+
+  const RAY = getAdaptiveRay();
+  const lonScale = Math.cos(state.currentLat * Math.PI / 180);
+  const dirs = [
+    { lat: state.currentLat + RAY, lon: state.currentLon,              label: 'N', color: '#ff6b6b' },
+    { lat: state.currentLat - RAY, lon: state.currentLon,              label: 'S', color: '#8b949e' },
+    { lat: state.currentLat,       lon: state.currentLon + RAY / lonScale, label: 'E', color: '#8b949e' },
+    { lat: state.currentLat,       lon: state.currentLon - RAY / lonScale, label: 'W', color: '#8b949e' },
+  ];
+  dirs.forEach(({ lat, lon, label, color }) => {
+    L.polyline([[state.currentLat, state.currentLon], [lat, lon]], {
+      color, weight: 1, opacity: 0.3, dashArray: '4 10'
+    }).addTo(state.cardinalGroup);
+    const icon = L.divIcon({
+      html: `<span style="font-size:11px;font-weight:700;color:${color};text-shadow:0 1px 3px rgba(0,0,0,0.9);background:rgba(0,0,0,0.45);padding:1px 4px;border-radius:3px;line-height:1.4">${label}</span>`,
+      className: '', iconAnchor: [8, 8]
+    });
+    L.marker([lat, lon], { icon }).addTo(state.cardinalGroup);
+  });
+}
+
+// ─── Distance rings ───────────────────────────────────────────────────────────
+function drawDistanceRings() {
+  if (!state.distanceRingGroup) return;
+  state.distanceRingGroup.clearLayers();
+  if (!document.getElementById('show-rings')?.checked) return;
+  if (state.currentLat === null) return;
+
+  const degPerMeter = 1 / 111111;
+  const lonScale = Math.cos(state.currentLat * Math.PI / 180);
+  [
+    { r: 500,   label: '500 m' },
+    { r: 1000,  label: '1 km'  },
+    { r: 5000,  label: '5 km'  },
+    { r: 10000, label: '10 km' },
+  ].forEach(({ r, label }) => {
+    L.circle([state.currentLat, state.currentLon], {
+      radius: r, color: '#58a6ff', weight: 1, opacity: 0.45, fill: false, dashArray: '3 8'
+    }).bindTooltip(label, { sticky: true }).addTo(state.distanceRingGroup);
+
+    // Label at top of ring
+    const labelLat = state.currentLat + r * degPerMeter;
+    L.marker([labelLat, state.currentLon], {
+      icon: L.divIcon({
+        html: `<span style="font-size:9px;color:#58a6ff;opacity:0.85;text-shadow:0 1px 2px rgba(0,0,0,0.9);white-space:nowrap;background:rgba(0,0,0,0.4);padding:0 3px;border-radius:2px">${label}</span>`,
+        className: '', iconAnchor: [0, 4]
+      })
+    }).addTo(state.distanceRingGroup);
+  });
+}
+
+// ─── Camera FOV cone ─────────────────────────────────────────────────────────
+function drawFOVCone() {
+  if (!state.fovGroup) return;
+  state.fovGroup.clearLayers();
+  if (!document.getElementById('show-fov')?.checked) return;
+  if (state.currentLat === null) return;
+
+  const focal   = Math.max(8, parseFloat(document.getElementById('fov-focal')?.value)   || 50);
+  const sKey    = document.getElementById('fov-sensor')?.value  || 'ff';
+  const bearing = parseFloat(document.getElementById('fov-bearing')?.value) || 0;
+
+  const sensorW = { ff: 36, apsc: 23.6, mft: 17.3, one: 13.2, phone: 6.3 };
+  const sw = sensorW[sKey] || 36;
+  const hfovRad = 2 * Math.atan(sw / (2 * focal));
+  const hfovDeg = (hfovRad * 180 / Math.PI).toFixed(1);
+
+  const dist = getAdaptiveArcR() * 2.5;
+  const lonScale = Math.cos(state.currentLat * Math.PI / 180);
+  const bRad = bearing * Math.PI / 180;
+
+  // Cone polygon (apex at pin)
+  const steps = 50;
+  const pts = [[state.currentLat, state.currentLon]];
+  for (let i = 0; i <= steps; i++) {
+    const a = bRad - hfovRad / 2 + hfovRad * i / steps;
+    pts.push([
+      state.currentLat + dist * Math.cos(a),
+      state.currentLon + dist * Math.sin(a) / lonScale
+    ]);
+  }
+  L.polygon(pts, {
+    color: '#f78166', weight: 1.5, opacity: 0.75,
+    fillColor: '#f78166', fillOpacity: 0.1
+  }).bindTooltip(`📷 ${focal}mm · ${hfovDeg}° H-FOV · ${bearing}°`, { sticky: true })
+   .addTo(state.fovGroup);
+
+  // Center-line axis
+  L.polyline([
+    [state.currentLat, state.currentLon],
+    [state.currentLat + dist * Math.cos(bRad), state.currentLon + dist * Math.sin(bRad) / lonScale]
+  ], { color: '#f78166', weight: 1.5, opacity: 0.5, dashArray: '5 5' }).addTo(state.fovGroup);
 }

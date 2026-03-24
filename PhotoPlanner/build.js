@@ -77,6 +77,7 @@ const JS_FILES = [
   'js/location.js',
   'js/datetime.js',
   'js/finder.js',
+  'js/mapcontrols.js',
   'js/main.js',
 ];
 

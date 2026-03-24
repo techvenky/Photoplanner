@@ -35,9 +35,10 @@ async function fetchWeather(lat, lon) {
     longitude:        lon.toFixed(4),
     current:          'temperature_2m,cloud_cover,weather_code',
     hourly:           'cloud_cover',
+    daily:            'sunrise,sunset',   // high-accuracy sunrise/sunset for sun times tab
     temperature_unit: 'celsius',
     timezone:         'auto',
-    forecast_days:    1,
+    forecast_days:    7,                  // 7 days covers near-future shoot planning
   });
 
   try {
@@ -48,12 +49,21 @@ async function fetchWeather(lat, lon) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
+    // Build a date→localTimeString map for sunrise/sunset (e.g. {"2026-03-23":"2026-03-23T07:14"})
+    const dailyDates   = data.daily?.time    || [];
+    const dailySunrise = data.daily?.sunrise || [];
+    const dailySunset  = data.daily?.sunset  || [];
+    const sunriseMap   = Object.fromEntries(dailyDates.map((d, i) => [d, dailySunrise[i]]));
+    const sunsetMap    = Object.fromEntries(dailyDates.map((d, i) => [d, dailySunset[i]]));
+
     state.weather = {
       temp:        data.current.temperature_2m,
       cloudCover:  data.current.cloud_cover,
       weatherCode: data.current.weather_code,
       hourlyCloud: data.hourly?.cloud_cover || [],
       hourlyTimes: data.hourly?.time || [],
+      sunriseMap,  // date → "YYYY-MM-DDTHH:MM" in location's local timezone
+      sunsetMap,
       fetchedAt:   Date.now(),
     };
   } catch (e) {

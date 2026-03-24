@@ -1,4 +1,4 @@
-  <div class="planner-layout">
+<div class="planner-layout">
 
     <div class="planner-sidebar">
       <!-- Mobile drag handle (tap to close drawer) -->
@@ -83,23 +83,23 @@
         <div id="tz-offset-label" class="text-secondary mt-1" style="font-size:0.7rem"></div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="d-flex justify-content-between align-items-center">
-          <span id="plan-time-display" class="time-display-big">6:00 AM</span>
-          <span id="plan-time-status" class="badge bg-secondary text-wrap text-end" style="font-size:0.65rem;max-width:110px"></span>
-        </div>
-        <input type="range" id="plan-time-slider" class="form-range" min="0" max="1439" value="360" step="5" style="accent-color:#e3b341" />
-        <div class="time-ticks"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span></div>
-      </div>
+      <!-- Time slider removed from sidebar — merged into bottom map bar -->
 
       <div class="sidebar-section">
         <div class="sidebar-section-title">Map Style</div>
-        <div class="d-flex gap-1 flex-wrap">
+        <div class="d-flex gap-1 flex-wrap mb-1">
           <button class="btn btn-sm map-layer-btn active" data-layer="street">🗺 Street</button>
           <button class="btn btn-sm map-layer-btn" data-layer="satellite">🛰 Satellite</button>
           <button class="btn btn-sm map-layer-btn" data-layer="hybrid">🛰+🏷</button>
-          <button class="btn btn-sm map-layer-btn" data-layer="terrain">🏔 Terrain</button>
+          <button class="btn btn-sm map-layer-btn" data-layer="terrain">🏔 Topo</button>
         </div>
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="btn btn-sm map-layer-btn map-layer-btn--free" data-layer="topplusopen" title="Free — no API key required">🗾 TopPlus</button>
+          <button class="btn btn-sm map-layer-btn map-layer-btn--tf" data-layer="tf-landscape" title="Thunderforest Landscape (free API key required)">🌲 Landscape</button>
+          <button class="btn btn-sm map-layer-btn map-layer-btn--tf" data-layer="tf-outdoors" title="Thunderforest Outdoors (free API key required)">⛰ Outdoors</button>
+          <button class="btn btn-sm map-layer-btn map-layer-btn--free" data-layer="light-pollution" title="NASA VIIRS Night Lights — light pollution map (free)">🌃 Light Poll.</button>
+        </div>
+        <div class="tf-key-hint" id="tf-key-hint">🔑 Thunderforest layers need a free API key at <a href="https://www.thunderforest.com/docs/apikeys/" target="_blank" rel="noopener">thunderforest.com</a></div>
       </div>
 
       <div class="sidebar-section">
@@ -121,6 +121,45 @@
             <input class="form-check-input" type="checkbox" id="show-milkyway" />
             <label class="form-check-label small" for="show-milkyway">🌌 Milky Way</label>
           </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-shadow" />
+            <label class="form-check-label small" for="show-shadow">🌑 Shadow Dir.</label>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-cardinal" />
+            <label class="form-check-label small" for="show-cardinal">🧭 Cardinal Lines</label>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="show-rings" />
+            <label class="form-check-label small" for="show-rings">📏 Distance Rings</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Camera FOV</div>
+        <p class="text-secondary mb-2" style="font-size:0.7rem">Visualize lens field of view on map</p>
+        <div class="d-flex gap-1 mb-1">
+          <select id="fov-sensor" class="form-select form-select-sm" style="flex:1.2">
+            <option value="ff">Full Frame</option>
+            <option value="apsc">APS-C</option>
+            <option value="mft">Micro 4/3</option>
+            <option value="one">1-inch</option>
+            <option value="phone">Phone</option>
+          </select>
+          <div class="input-group input-group-sm" style="flex:1">
+            <input id="fov-focal" type="number" class="form-control form-control-sm" value="50" min="8" max="800" />
+            <span class="input-group-text" style="font-size:0.7rem">mm</span>
+          </div>
+        </div>
+        <div class="d-flex gap-1 align-items-center mb-1">
+          <label class="text-secondary" style="font-size:0.7rem;white-space:nowrap">Bearing</label>
+          <input id="fov-bearing" type="number" class="form-control form-control-sm" value="0" min="0" max="360" style="flex:1" />
+          <span class="text-secondary" style="font-size:0.7rem">°N</span>
+        </div>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="show-fov" />
+          <label class="form-check-label small" for="show-fov">📷 Show FOV Cone</label>
         </div>
       </div>
 
@@ -146,9 +185,8 @@
 
     <div class="map-wrap">
       <div id="map"></div>
-      <!-- Mobile FAB: opens controls drawer -->
-      <button id="mobile-sidebar-fab" class="mobile-map-fab" aria-label="Open controls">⚙ Controls</button>
 
+      <!-- ── Altitude Timeline (collapsible panel above time bar) ──────────── -->
       <div id="timeline-overlay" class="timeline-overlay collapsed">
         <div id="timeline-handle" class="timeline-handle">
           <span class="tl-drag-pill"></span>
@@ -162,6 +200,7 @@
             <button id="tl-toggle" class="tl-ctrl-btn tl-toggle-btn" title="Show / Hide">▲</button>
           </div>
         </div>
+        <div id="tl-events-bar" class="tl-events-bar"></div>
         <div id="tl-chart-wrap" class="tl-chart-wrap">
           <canvas id="timeline-canvas"></canvas>
         </div>
@@ -178,7 +217,27 @@
           <span class="tl-leg-scroll-hint">← drag to scrub →</span>
         </div>
       </div>
-    </div>
+
+      <!-- ── Bottom Time Bar (always visible, sky-gradient slider) ─────────── -->
+      <div id="map-time-bar" class="map-time-bar">
+        <div class="map-time-bar-inner">
+          <div class="map-time-bar-header">
+            <!-- Mobile FAB lives here so it's always in the time bar, never behind the timeline -->
+            <button id="mobile-sidebar-fab" class="mobile-map-fab" aria-label="Open controls">⚙ Controls</button>
+            <span class="map-time-bar-label" id="map-time-bar-label">6:00 AM</span>
+            <span class="map-time-bar-status" id="map-time-bar-status"></span>
+            <span class="map-time-bar-hint">← drag to change time →</span>
+          </div>
+          <input type="range" id="plan-time-slider" class="map-time-bar-slider"
+                 min="0" max="1439" value="360" step="5" />
+          <div class="map-time-bar-ticks">
+            <span>12am</span><span>3am</span><span>6am</span><span>9am</span>
+            <span>12pm</span><span>3pm</span><span>6pm</span><span>9pm</span><span>12am</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.map-wrap -->
 
   </div>
 

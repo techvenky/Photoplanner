@@ -9,6 +9,7 @@ const AR = {
   elevation:       null,   // camera tilt above horizon in degrees
   FOV_H:           62,     // horizontal field-of-view (degrees) — typical rear camera
   FOV_V:           46,     // vertical field-of-view
+  tiltOffset:      0,      // user-adjustable horizon offset (degrees) for device calibration
   useAbsolute:     false,  // true once deviceorientationabsolute gives valid data
   useRelative:     false,  // Android fallback: treat relative alpha as north-ref after timeout
   compassTimer:    null,   // fallback timer handle
@@ -101,6 +102,7 @@ function closeARView() {
   AR.absNullCount   = 0;
   AR.smoothHeading  = null;
   AR.smoothElevation = null;
+  AR.tiltOffset     = 0;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -415,13 +417,15 @@ function _drawFrame() {
   _drawHorizon(ctx, canvas);
   _drawCrosshair(ctx, canvas);
 
-  // ── 2. Orbital path arcs ─────────────────────────────────────────────────────
+  // ── 2. Orbital path arcs with hourly time labels (PhotoPills style) ──────────
   if (AR.layers.path) {
     try {
       _drawCelestialPath(ctx, canvas,
-        (d, la, lo) => SunCalc.getPosition(d, la, lo),     'rgba(255,200,50,0.45)');
+        (d, la, lo) => SunCalc.getPosition(d, la, lo),
+        'rgba(255,200,50,0.55)', AR.layers.sun ? '#FFD700' : null);
       _drawCelestialPath(ctx, canvas,
-        (d, la, lo) => SunCalc.getMoonPosition(d, la, lo), 'rgba(150,200,255,0.35)');
+        (d, la, lo) => SunCalc.getMoonPosition(d, la, lo),
+        'rgba(150,200,255,0.45)', AR.layers.moon ? 'rgba(170,220,255,0.95)' : null);
     } catch (_) {}
   }
 
@@ -449,6 +453,7 @@ function _drawFrame() {
   }
 
   try { _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt); } catch (_) {}
+  try { _drawCompassBadge(ctx, canvas); } catch (_) {}
 }
 
 // ─── Projection: (azimuth°, altitude°) → canvas (x, y) ───────────────────────
@@ -460,7 +465,7 @@ function _project(az, alt, canvas, clipFrac = 0.92) {
   while (dAz >  180) dAz -= 360;
   while (dAz < -180) dAz += 360;
 
-  const camElev = AR.elevation != null ? AR.elevation : 0;
+  const camElev = (AR.elevation != null ? AR.elevation : 0) + AR.tiltOffset;
   const dAlt    = alt - camElev;
 
   // Half-FOV is the angular distance from centre to the screen edge.
@@ -545,7 +550,7 @@ function _drawOffScreenArrow(ctx, canvas, az, alt, color, symbol) {
   while (dAz >  180) dAz -= 360;
   while (dAz < -180) dAz += 360;
 
-  const camElev = AR.elevation != null ? AR.elevation : 0;
+  const camElev = (AR.elevation != null ? AR.elevation : 0) + AR.tiltOffset;
   const dAlt    = alt - camElev;
 
   // Screen-space displacement vector (pixels from canvas centre)
@@ -616,7 +621,7 @@ function _drawOffScreenArrow(ctx, canvas, az, alt, color, symbol) {
 
 // ─── Elevation grid ───────────────────────────────────────────────────────────
 function _drawElevationGrid(ctx, canvas) {
-  const camElev = AR.elevation != null ? AR.elevation : 0;
+  const camElev = (AR.elevation != null ? AR.elevation : 0) + AR.tiltOffset;
   const fnt = Math.max(10, Math.round(canvas.height * 0.022));
   ctx.save();
   ctx.font = `${fnt}px sans-serif`;
@@ -649,7 +654,7 @@ function _drawElevationGrid(ctx, canvas) {
 
 // ─── Horizon line ─────────────────────────────────────────────────────────────
 function _drawHorizon(ctx, canvas) {
-  const camElev = AR.elevation != null ? AR.elevation : 0;
+  const camElev = (AR.elevation != null ? AR.elevation : 0) + AR.tiltOffset;
   const y = canvas.height / 2 + (camElev / (AR.FOV_V / 2)) * (canvas.height / 2);
 
   ctx.save();
@@ -668,31 +673,108 @@ function _drawHorizon(ctx, canvas) {
 }
 
 // ─── Celestial path arcs (sun or moon trajectory across the day) ──────────────
-function _drawCelestialPath(ctx, canvas, getSunCalcPos, color) {
+// labelColor: if provided, draws hourly time stamps along the arc (PhotoPills style)
+function _drawCelestialPath(ctx, canvas, getSunCalcPos, color, labelColor) {
   const lat  = state.currentLat, lon = state.currentLon;
   const date = _getARDate();
   const base = new Date(date);
   base.setHours(0, 0, 0, 0);
 
+  // Draw smooth arc (finer 10-minute steps)
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.lineWidth   = 1.5;
-  ctx.setLineDash([4, 5]);
+  ctx.lineWidth   = 2;
+  ctx.setLineDash([5, 6]);
 
   let lastPt = null;
   ctx.beginPath();
-  for (let m = 0; m <= 1440; m += 30) {
+  for (let m = 0; m <= 1440; m += 10) {
     const d   = new Date(base.getTime() + m * 60000);
     const pos = getSunCalcPos(d, lat, lon);
     const az  = (toDeg(pos.azimuth) + 180 + 360) % 360;
     const alt =  toDeg(pos.altitude);
-    if (alt < -3) { lastPt = null; continue; }
+    if (alt < -5) { lastPt = null; continue; }
     const pt = _project(az, alt, canvas, 1.0);
     if (!pt) { lastPt = null; continue; }
     if (!lastPt) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
     lastPt = pt;
   }
   ctx.stroke();
+  ctx.restore();
+
+  // Hourly time stamps along arc (PhotoPills style)
+  if (!labelColor) return;
+  const fnt = Math.max(9, Math.round(canvas.height * 0.019));
+  for (let m = 0; m <= 1440; m += 60) {
+    const d   = new Date(base.getTime() + m * 60000);
+    const pos = getSunCalcPos(d, lat, lon);
+    const az  = (toDeg(pos.azimuth) + 180 + 360) % 360;
+    const alt =  toDeg(pos.altitude);
+    if (alt < -2) continue;
+    const pt = _project(az, alt, canvas, 0.88);
+    if (!pt) continue;
+
+    const h = d.getHours();
+    const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+
+    // Dot on arc
+    ctx.save();
+    ctx.fillStyle = labelColor;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Time chip above dot
+    _drawChip(ctx, pt.x, pt.y - 10, label, fnt, labelColor, 'rgba(0,0,0,0.68)');
+  }
+}
+
+// ─── Compass direction badge (PhotoPills-style circle at bottom centre) ────────
+function _drawCompassBadge(ctx, canvas) {
+  if (AR.heading === null) return;
+  const dir8 = ['N','NE','E','SE','S','SW','W','NW'];
+  const dirLabel = dir8[Math.round(AR.heading / 45) % 8];
+  const deg = Math.round(AR.heading);
+
+  const r  = Math.max(28, Math.round(canvas.width * 0.065));
+  const cx = canvas.width / 2;
+  const cy = canvas.height - r - Math.round(canvas.height * 0.06);
+
+  ctx.save();
+
+  // Outer ring glow
+  const grd = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 1.5);
+  grd.addColorStop(0, 'rgba(255,255,255,0.08)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Badge background
+  ctx.fillStyle   = 'rgba(0,0,0,0.62)';
+  ctx.strokeStyle = AR.useRelative ? 'rgba(255,159,67,0.9)' : 'rgba(255,255,255,0.75)';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Cardinal direction text
+  const fntDir = Math.max(13, Math.round(canvas.height * 0.033));
+  ctx.fillStyle    = AR.useRelative ? '#ff9f43' : '#ffffff';
+  ctx.font         = `bold ${fntDir}px sans-serif`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(dirLabel, cx, cy - fntDir * 0.22);
+
+  // Degree sub-label
+  const fntDeg = Math.max(9, Math.round(canvas.height * 0.018));
+  ctx.font         = `${fntDeg}px monospace`;
+  ctx.fillStyle    = 'rgba(255,255,255,0.65)';
+  ctx.fillText(`${deg}°`, cx, cy + fntDir * 0.62);
+
   ctx.restore();
 }
 
@@ -1113,33 +1195,27 @@ function _drawChip(ctx, cx, y, text, fontSize, textColor, bgColor) {
   ctx.textBaseline = 'alphabetic';
 }
 
-// ─── Info bar (bottom) ────────────────────────────────────────────────────────
+// ─── Info bar (compact side chips, avoids compass badge at bottom centre) ─────
 function _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt) {
-  const fnt  = Math.max(11, Math.round(canvas.height * 0.028));
-  const pad  = 12;
-  const lh   = fnt + 10;
+  const fnt  = Math.max(10, Math.round(canvas.height * 0.023));
   const date = _getARDate();
   const moonInfo = SunCalc.getMoonIllumination(date);
   const phase    = moonPhaseEmoji(moonInfo.phase);
 
-  const lines = [
-    `☀  Az ${sunAz.toFixed(1)}°   Alt ${sunAlt.toFixed(1)}°`,
-    `${phase}  Az ${moonAz.toFixed(1)}°   Alt ${moonAlt.toFixed(1)}°`,
-  ];
-  const boxH = lines.length * lh + pad * 1.5;
-  const by   = canvas.height - boxH - 8;
+  // Left chip — Sun
+  const sunLine  = `☀  ${sunAlt.toFixed(0)}°`;
+  // Right chip — Moon
+  const moonLine = `${phase} ${moonAlt.toFixed(0)}°`;
+
+  const badgeR  = Math.max(28, Math.round(canvas.width * 0.065));
+  const badgeCY = canvas.height - badgeR - Math.round(canvas.height * 0.06);
+  // Place chips at the same vertical level as the compass badge, flanking it
+  const cy = badgeCY;
+  const margin = badgeR * 2.2 + 8;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath();
-  _roundRect(ctx, 8, by, canvas.width - 16, boxH, 10);
-  ctx.fill();
-  ctx.font      = `${fnt}px sans-serif`;
-  ctx.fillStyle = '#e6edf3';
-  ctx.textAlign = 'left';
-  lines.forEach((line, i) => {
-    ctx.fillText(line, 8 + pad, by + pad + lh * i + fnt * 0.85);
-  });
+  _drawChip(ctx, margin,                    cy, sunLine,  fnt, '#FFD700',             'rgba(0,0,0,0.62)');
+  _drawChip(ctx, canvas.width - margin, cy, moonLine, fnt, 'rgba(180,220,255,0.95)', 'rgba(0,0,0,0.62)');
   ctx.restore();
 }
 
@@ -1208,6 +1284,16 @@ function _initARTimeControls() {
       btn.classList.toggle('active', AR.layers[layer]);
     });
   });
+
+  // Horizon tilt calibration buttons
+  function _updateTiltLabel() {
+    const el = document.getElementById('ar-tilt-offset');
+    if (el) el.textContent = (AR.tiltOffset >= 0 ? '+' : '') + AR.tiltOffset + '°';
+  }
+  const tiltUp   = document.getElementById('ar-tilt-up');
+  const tiltDown = document.getElementById('ar-tilt-down');
+  if (tiltUp)   tiltUp.addEventListener('click',   () => { AR.tiltOffset = Math.min(30, AR.tiltOffset + 1); _updateTiltLabel(); });
+  if (tiltDown) tiltDown.addEventListener('click', () => { AR.tiltOffset = Math.max(-30, AR.tiltOffset - 1); _updateTiltLabel(); });
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

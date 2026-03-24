@@ -32,6 +32,7 @@ function buildDateSlider() {
       if (state.targetLat !== null) updateTargetInfo();
       updateSunMoon();
       updateMilkyWay();
+      if (typeof updateMoonViewer === 'function') updateMoonViewer();
     });
     container.appendChild(pill);
   }
@@ -56,10 +57,18 @@ function initDatePickers() {
   });
 
   // Overlay toggles
-  document.getElementById('show-sun').addEventListener('change', drawSunPath);
-  document.getElementById('show-moon').addEventListener('change', drawSunPath);
-  document.getElementById('show-golden').addEventListener('change', drawSunPath);
-  document.getElementById('show-milkyway').addEventListener('change', drawSunPath);
+  ['show-sun','show-moon','show-golden','show-milkyway',
+   'show-shadow','show-cardinal','show-rings','show-fov'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', drawSunPath);
+  });
+
+  // FOV cone inputs — redraw cone live without full sunpath redraw
+  ['fov-focal','fov-bearing','fov-sensor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', drawFOVCone);
+  });
 
   // Date prev/next week buttons
   document.getElementById('date-prev-week').addEventListener('click', () => {

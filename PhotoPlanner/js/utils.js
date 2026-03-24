@@ -2,8 +2,10 @@
 
 function fmtTime(date) {
   if (!date || isNaN(date)) return '—';
-  if (typeof dayjs !== 'undefined' && state.selectedTimezone) {
-    try { return dayjs(date).tz(state.selectedTimezone).format('h:mm A'); } catch(e) {
+  // Use selected timezone, or fall back to the auto-detected location timezone
+  const tz = state.selectedTimezone || state.locationTz;
+  if (typeof dayjs !== 'undefined' && tz) {
+    try { return dayjs(date).tz(tz).format('h:mm A'); } catch(e) {
       console.warn('fmtTime: timezone conversion failed', e);
     }
   }
@@ -54,11 +56,31 @@ function minutesToAmPm(minutes) {
 }
 
 function updateSliderDisplay() {
-  const minutes = parseInt(document.getElementById('plan-time-slider').value);
+  const slider = document.getElementById('plan-time-slider');
+  if (!slider) return;
+  const minutes = parseInt(slider.value);
   const label   = minutesToAmPm(minutes);
-  document.getElementById('plan-time-display').textContent = label;
-  document.getElementById('sky-time-label').textContent    = label;
-  document.getElementById('sky-time-slider').value         = minutes;
+
+  // #plan-time-display was moved out of the sidebar — guard in case it's absent
+  const displayEl = document.getElementById('plan-time-display');
+  if (displayEl) displayEl.textContent = label;
+
+  const skyLabel = document.getElementById('sky-time-label');
+  if (skyLabel) skyLabel.textContent = label;
+
+  const skySlider = document.getElementById('sky-time-slider');
+  if (skySlider) skySlider.value = minutes;
+
+  // Keep the bottom bar label/status in sync
+  const barLabel  = document.getElementById('map-time-bar-label');
+  const barStatus = document.getElementById('map-time-bar-status');
+  if (barLabel || barStatus) {
+    if (typeof _updateBarLabel === 'function') {
+      _updateBarLabel(barLabel, barStatus, minutes);
+    } else if (barLabel) {
+      barLabel.textContent = label;
+    }
+  }
 }
 
 // Returns icon distance in degrees that maps to ~90px at current zoom
@@ -67,9 +89,23 @@ function getAdaptiveDot() {
   return 90 * 360 / (256 * Math.pow(2, zoom));
 }
 
+// Returns arc radius in degrees that maps to ~200px at current zoom (for sun/moon arc)
+function getAdaptiveArcR() {
+  const zoom = state.map ? state.map.getZoom() : 8;
+  return 200 * 360 / (256 * Math.pow(2, zoom));
+}
+
+// Returns a ray length in degrees that extends well past the map viewport edges
+function getAdaptiveRay() {
+  if (!state.map) return 4.0;
+  const b = state.map.getBounds();
+  return Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest()) * 1.2;
+}
+
 function getSelectedDate() {
   const d = document.getElementById('plan-date').value;
-  return d ? new Date(d + 'T12:00:00') : new Date();
+  // Use UTC noon so SunCalc always gets the correct calendar day regardless of browser timezone
+  return d ? new Date(d + 'T12:00:00Z') : new Date();
 }
 
 // Draw a polyline with a dark outline beneath for readability over map tiles
