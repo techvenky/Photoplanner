@@ -6,3 +6,28 @@ dist/
 
 # Generated files — edit templates/*.html, not these
 js/templates/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor directories
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Lock files (keep package-lock.json but ignore yarn/pnpm)
+yarn.lock
+pnpm-lock.yaml
