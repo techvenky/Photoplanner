@@ -426,16 +426,16 @@ function _drawFrame() {
       _drawCelestialPath(ctx, canvas,
         (d, la, lo) => SunCalc.getMoonPosition(d, la, lo),
         'rgba(150,200,255,0.45)', AR.layers.moon ? 'rgba(170,220,255,0.95)' : null);
-    } catch (_) {}
+    } catch (e) { console.warn('AR: celestial path draw failed', e); }
   }
 
   // ── 3. Compass ruler — moved BEFORE celestial objects so it always renders ───
   _drawCompassRuler(ctx, canvas);
-  try { _drawRiseSetOnRuler(ctx, canvas, date, lat, lon); } catch (_) {}
+  try { _drawRiseSetOnRuler(ctx, canvas, date, lat, lon); } catch (e) { console.warn('AR: rise/set ruler failed', e); }
 
   // ── 4. Celestial objects — each isolated so one crash can't block the rest ───
-  if (AR.layers.mw)      { try { _drawGalacticCenter(ctx, canvas, date, lat, lon); } catch (_) {} }
-  if (AR.layers.planets) { try { _drawPlanets(ctx, canvas, date, lat, lon);        } catch (_) {} }
+  if (AR.layers.mw)      { try { _drawGalacticCenter(ctx, canvas, date, lat, lon); } catch (e) { console.warn('AR: galactic center failed', e); } }
+  if (AR.layers.planets) { try { _drawPlanets(ctx, canvas, date, lat, lon);        } catch (e) { console.warn('AR: planets failed', e); } }
 
   const sunXY  = _project(sunAz,  sunAlt,  canvas);
   const moonXY = _project(moonAz, moonAlt, canvas);
@@ -443,17 +443,17 @@ function _drawFrame() {
     try {
       if (sunXY)  _drawSun(ctx, sunXY.x, sunXY.y, sunAlt, canvas);
       else        _drawOffScreenArrow(ctx, canvas, sunAz,  sunAlt,  '#FFD700',             '☀');
-    } catch (_) {}
+    } catch (e) { console.warn('AR: sun draw failed', e); }
   }
   if (AR.layers.moon) {
     try {
       if (moonXY) _drawMoon(ctx, moonXY.x, moonXY.y, moonAlt, canvas);
       else        _drawOffScreenArrow(ctx, canvas, moonAz, moonAlt, 'rgba(180,220,255,1)', '☽');
-    } catch (_) {}
+    } catch (e) { console.warn('AR: moon draw failed', e); }
   }
 
-  try { _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt); } catch (_) {}
-  try { _drawCompassBadge(ctx, canvas); } catch (_) {}
+  try { _drawInfoBar(ctx, canvas, sunAz, sunAlt, moonAz, moonAlt); } catch (e) { console.warn('AR: info bar failed', e); }
+  try { _drawCompassBadge(ctx, canvas); } catch (e) { console.warn('AR: compass badge failed', e); }
 }
 
 // ─── Projection: (azimuth°, altitude°) → canvas (x, y) ───────────────────────

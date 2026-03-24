@@ -19,6 +19,25 @@ function getDateAtMinutes(minutes) {
   return dt;
 }
 
+// Builds above-horizon arc segments for a celestial body over the full day.
+// Returns an array of point arrays, split at below-horizon gaps to avoid
+// false connecting lines between unrelated above-horizon positions.
+function _buildCelestialArc(date, positionFn, R) {
+  const segs = [[]];
+  for (let h = 0; h <= 24; h += 0.1) {
+    const d = new Date(date);
+    d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+    const pos = positionFn(d, state.currentLat, state.currentLon);
+    const last = segs[segs.length - 1];
+    if (pos.altitude > 0) {
+      last.push(azToLatLon(pos.azimuth, R));
+    } else if (last.length > 0) {
+      segs.push([]);
+    }
+  }
+  return segs;
+}
+
 // Draws the static full-day arc + key-time markers. Called on date/location change.
 function drawSunPath() {
   if (state.currentLat === null) return;
@@ -31,20 +50,7 @@ function drawSunPath() {
   const R = getAdaptiveArcR(); // arc radius scales with zoom (~200px on screen)
 
   if (document.getElementById('show-sun').checked) {
-    // Full-day arc — split into separate segments so a below-horizon gap never
-    // creates a false line connecting two unrelated above-horizon positions.
-    const sunSegs = [[]];
-    for (let h = 0; h <= 24; h += 0.1) {
-      const d = new Date(date);
-      d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
-      const pos = SunCalc.getPosition(d, state.currentLat, state.currentLon);
-      const last = sunSegs[sunSegs.length - 1];
-      if (pos.altitude > 0) {
-        last.push(azToLatLon(pos.azimuth, R));
-      } else if (last.length > 0) {
-        sunSegs.push([]);
-      }
-    }
+    const sunSegs = _buildCelestialArc(date, SunCalc.getPosition, R);
     sunSegs.forEach(seg => {
       if (seg.length > 1)
         addStrokedPolyline(seg, { color: '#e3b341', weight: 2.5, opacity: 0.85 }, state.sunPathGroup);
@@ -89,19 +95,7 @@ function drawSunPath() {
   }
 
   if (document.getElementById('show-moon').checked) {
-    // Split into segments so a set→rise gap never creates a false connecting line.
-    const moonSegs = [[]];
-    for (let h = 0; h <= 24; h += 0.1) {
-      const d = new Date(date);
-      d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
-      const pos = SunCalc.getMoonPosition(d, state.currentLat, state.currentLon);
-      const last = moonSegs[moonSegs.length - 1];
-      if (pos.altitude > 0) {
-        last.push(azToLatLon(pos.azimuth, R));
-      } else if (last.length > 0) {
-        moonSegs.push([]);
-      }
-    }
+    const moonSegs = _buildCelestialArc(date, SunCalc.getMoonPosition, R);
     moonSegs.forEach(seg => {
       if (seg.length > 1)
         addStrokedPolyline(seg, { color: '#a8d8ea', weight: 2, opacity: 0.8, dashArray: '6 4' }, state.moonPathGroup);

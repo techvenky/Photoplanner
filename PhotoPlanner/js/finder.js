@@ -11,7 +11,7 @@ function _finderLightType(sunAltDeg) {
 
 // Composite quality score (1-5) — higher = better shooting conditions
 function _finderScore(r) {
-  var score = 0;
+  let score = 0;
   if (r.body === 'moon') {
     if      (r.light.cls === 'night')    score += 3;
     else if (r.light.cls === 'astro')    score += 2;
@@ -32,12 +32,13 @@ function _finderScore(r) {
 function _drawFinderBearingLine(lat, lon, azDeg) {
   _clearFinderBearingLine();
   if (!state.map) return;
-  var R = 6371, d = 50 / R;
-  var az   = azDeg * Math.PI / 180;
-  var lat1 = lat * Math.PI / 180;
-  var lon1 = lon * Math.PI / 180;
-  var lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(az));
-  var lon2 = lon1 + Math.atan2(Math.sin(az) * Math.sin(d) * Math.cos(lat1),
+  const R = 6371;
+  const d = 50 / R;
+  const az   = azDeg * Math.PI / 180;
+  const lat1 = lat * Math.PI / 180;
+  const lon1 = lon * Math.PI / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(az));
+  const lon2 = lon1 + Math.atan2(Math.sin(az) * Math.sin(d) * Math.cos(lat1),
                                Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
   state.finderBearingLayer = L.polyline(
     [[lat, lon], [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI]],
@@ -54,20 +55,20 @@ function _clearFinderBearingLine() {
 
 // ─── .ics calendar export ─────────────────────────────────────────────────────
 function _exportFinderICS(results) {
-  function pad(n) { return String(n).padStart(2, '0'); }
-  function toICSDate(d) {
-    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
-           'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
-  }
-  var lines = [
+  const pad = n => String(n).padStart(2, '0');
+  const toICSDate = d =>
+    d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+    'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
+
+  const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0',
     'PRODID:-//PhotoPlanner//Alignment Finder//EN',
     'CALSCALE:GREGORIAN',
   ];
-  results.forEach(function(r) {
-    var endD      = new Date(r.date.getTime() + 30 * 60000);
-    var bodyLabel = r.body === 'moon' ? 'Moon' : 'Sun';
-    var desc = 'Azimuth: ' + r.az.toFixed(1) + 'deg | Alt: ' + r.altDeg.toFixed(1) + 'deg | ' + r.light.label;
+  results.forEach(r => {
+    const endD      = new Date(r.date.getTime() + 30 * 60000);
+    const bodyLabel = r.body === 'moon' ? 'Moon' : 'Sun';
+    let desc = 'Azimuth: ' + r.az.toFixed(1) + 'deg | Alt: ' + r.altDeg.toFixed(1) + 'deg | ' + r.light.label;
     if (r.body === 'moon') desc += ' | Moon ' + r.illumination + '%';
     lines.push(
       'BEGIN:VEVENT',
@@ -79,9 +80,9 @@ function _exportFinderICS(results) {
     );
   });
   lines.push('END:VCALENDAR');
-  var blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
   a.href = url; a.download = 'photoplanner-alignments.ics'; a.click();
   URL.revokeObjectURL(url);
 }
@@ -90,36 +91,36 @@ function _exportFinderICS(results) {
 function searchAlignments(opts) {
   // opts: { startDate, endDate, targetAz, azTol, targetAltDeg, altTolDeg,
   //         distKm, lat, lon, body, stepMin?, minAltDeg? }
-  var results     = [];
-  var stepMs      = (opts.stepMin || 10) * 60 * 1000;
-  var MIN_GAP_MS  = 60 * 60 * 1000;  // suppress duplicates within 1 h
-  var minAltDeg   = opts.minAltDeg || 0;
-  var lastResultT = -Infinity;
+  const results     = [];
+  const stepMs      = (opts.stepMin || 10) * 60 * 1000;
+  const MIN_GAP_MS  = 60 * 60 * 1000;  // suppress duplicates within 1 h
+  const minAltDeg   = opts.minAltDeg || 0;
+  let lastResultT   = -Infinity;
 
-  var t      = opts.startDate.getTime();
-  var endT   = opts.endDate.getTime();
-  var isMoon = (opts.body !== 'sun');
+  let t          = opts.startDate.getTime();
+  const endT     = opts.endDate.getTime();
+  const isMoon   = (opts.body !== 'sun');
 
   while (t <= endT) {
-    var d = new Date(t);
-    var bodyPos = isMoon
+    const d = new Date(t);
+    const bodyPos = isMoon
       ? SunCalc.getMoonPosition(d, opts.lat, opts.lon)
       : SunCalc.getPosition(d, opts.lat, opts.lon);
-    var bodyAltDeg = bodyPos.altitude * 180 / Math.PI;
+    const bodyAltDeg = bodyPos.altitude * 180 / Math.PI;
 
     if (bodyAltDeg > minAltDeg) {
-      var bodyAz = ((bodyPos.azimuth + Math.PI) * 180 / Math.PI + 360) % 360;
+      const bodyAz = ((bodyPos.azimuth + Math.PI) * 180 / Math.PI + 360) % 360;
       if (circularAzDiff(bodyAz, opts.targetAz) <= opts.azTol) {
-        var altDiff = Math.abs(bodyAltDeg - opts.targetAltDeg);
+        const altDiff = Math.abs(bodyAltDeg - opts.targetAltDeg);
 
         if (altDiff <= opts.altTolDeg && t - lastResultT > MIN_GAP_MS) {
-          var sunAltDeg = isMoon
+          const sunAltDeg = isMoon
             ? SunCalc.getPosition(d, opts.lat, opts.lon).altitude * 180 / Math.PI
             : bodyAltDeg;
-          var light = _finderLightType(sunAltDeg);
+          const light = _finderLightType(sunAltDeg);
 
-          var heightM = opts.distKm ? opts.distKm * 1000 * Math.tan(bodyPos.altitude) : null;
-          var result = {
+          const heightM = opts.distKm ? opts.distKm * 1000 * Math.tan(bodyPos.altitude) : null;
+          const result = {
             date:      new Date(t),
             az:        bodyAz,
             altDeg:    bodyAltDeg,
@@ -130,7 +131,7 @@ function searchAlignments(opts) {
           };
 
           if (isMoon) {
-            var illum = SunCalc.getMoonIllumination(d);
+            const illum = SunCalc.getMoonIllumination(d);
             result.phase        = illum.phase;
             result.phaseEmoji   = moonPhaseEmoji(illum.phase);
             result.illumination = Math.round(illum.fraction * 100);
@@ -150,7 +151,7 @@ function searchAlignments(opts) {
 
 // ─── Apply result to planner ───────────────────────────────────────────────────
 function applyFinderResult(d, body) {
-  var dateStr = d.getFullYear() + '-' +
+  const dateStr = d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
 
@@ -162,7 +163,7 @@ function applyFinderResult(d, body) {
   if (window._fpSM)   window._fpSM.setDate(dateStr, false);
   if (window._fpMW)   window._fpMW.setDate(dateStr, false);
 
-  var minutes = d.getHours() * 60 + d.getMinutes();
+  const minutes = d.getHours() * 60 + d.getMinutes();
   document.getElementById('plan-time-slider').value = minutes;
   document.getElementById('sky-time-slider').value  = minutes;
   updateSliderDisplay();
@@ -181,54 +182,54 @@ function applyFinderResult(d, body) {
     updatePlannerInfo();
     if (state.targetLat !== null) updateTargetInfo();
     drawSkyDomeIfOpen();
-    var overlay = document.getElementById('timeline-overlay');
+    const overlay = document.getElementById('timeline-overlay');
     if (overlay && !overlay.classList.contains('collapsed')) drawTimelineOverlay(true);
   }
 
   document.getElementById('finder-modal').style.display = 'none';
-  var bodyLabel = body === 'moon' ? '🌕 Moon' : '☀️ Sun';
+  const bodyLabel = body === 'moon' ? '🌕 Moon' : '☀️ Sun';
   showToast(bodyLabel + ' alignment: ' +
     d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + fmtTime(d), 'success');
 }
 
 // ─── Render results table ──────────────────────────────────────────────────────
 function renderFinderResults(results) {
-  var el = document.getElementById('finder-results');
+  const el = document.getElementById('finder-results');
 
   if (results.length === 0) {
     el.innerHTML = '<div class="text-secondary small p-3 text-center">No alignments found.<br>Try wider tolerances, longer range, or adjust azimuth.</div>';
     return;
   }
 
-  var isMoon = results[0].body !== 'sun';
+  const isMoon = results[0].body !== 'sun';
 
   // Light-type filter chips
-  var seenCls = [];
-  results.forEach(function(r) { if (!seenCls.includes(r.light.cls)) seenCls.push(r.light.cls); });
-  var chips = seenCls.map(function(cls) {
-    var label = results.find(function(r) { return r.light.cls === cls; }).light.label;
+  const seenCls = [];
+  results.forEach(r => { if (!seenCls.includes(r.light.cls)) seenCls.push(r.light.cls); });
+  const chips = seenCls.map(cls => {
+    const label = results.find(r => r.light.cls === cls).light.label;
     return '<button class="finder-filter-chip active" data-cls="' + cls + '">' + label + '</button>';
   }).join('');
 
   // Table rows
-  var skyHeader = isMoon ? '<th>Sky</th>' : '';
-  var rows = results.map(function(r) {
-    var elevStr = r.altDeg.toFixed(2) + '°';
+  const skyHeader = isMoon ? '<th>Sky</th>' : '';
+  const rows = results.map(r => {
+    let elevStr = r.altDeg.toFixed(2) + '°';
     if (r.heightM !== null) {
-      var hAbs = Math.abs(r.heightM);
-      var hStr = hAbs >= 1000 ? (r.heightM / 1000).toFixed(2) + ' km' : r.heightM.toFixed(0) + ' m';
+      const hAbs = Math.abs(r.heightM);
+      const hStr = hAbs >= 1000 ? (r.heightM / 1000).toFixed(2) + ' km' : r.heightM.toFixed(0) + ' m';
       elevStr += ' <span style="color:#484f58;font-size:0.78em">(~' + hStr + ')</span>';
     }
-    var bodyCell = isMoon
+    const bodyCell = isMoon
       ? (r.phaseEmoji + ' <span class="finder-illum">' + r.illumination + '%</span>')
       : '☀️ <span class="finder-illum">' + r.altDeg.toFixed(1) + '°</span>';
-    var lastCell = isMoon
+    const lastCell = isMoon
       ? '<td>' + r.moonSizeM.toFixed(1) + ' m</td>'
       : '<td>' + r.az.toFixed(1) + '°</td>';
-    var skyCell = isMoon
+    const skyCell = isMoon
       ? '<td><span class="finder-badge finder-badge-' + r.light.cls + '">' + r.light.label + '</span></td>'
       : '';
-    var stars = '●'.repeat(r.score) + '○'.repeat(5 - r.score);
+    const stars = '●'.repeat(r.score) + '○'.repeat(5 - r.score);
     return '<tr class="finder-result-row"' +
       ' data-cls="'  + r.light.cls + '"' +
       ' data-ts="'   + r.date.getTime() + '"' +
@@ -245,8 +246,8 @@ function renderFinderResults(results) {
       '</tr>';
   }).join('');
 
-  var firstHeader = isMoon ? '<th>Phase</th>' : '<th>Sun</th>';
-  var lastHeader  = isMoon ? '<th>Moon</th>'  : '<th>Azimuth</th>';
+  const firstHeader = isMoon ? '<th>Phase</th>' : '<th>Sun</th>';
+  const lastHeader  = isMoon ? '<th>Moon</th>'  : '<th>Azimuth</th>';
 
   el.innerHTML =
     '<div class="finder-filter-row">' + chips +
@@ -265,7 +266,7 @@ function renderFinderResults(results) {
     '</div>';
 
   // Row events: click → apply; hover → map bearing line
-  el.querySelectorAll('.finder-result-row').forEach(function(row) {
+  el.querySelectorAll('.finder-result-row').forEach(row => {
     row.addEventListener('click', function() {
       applyFinderResult(new Date(parseInt(this.dataset.ts)), this.dataset.body);
     });
@@ -277,37 +278,37 @@ function renderFinderResults(results) {
   });
 
   // Filter chips
-  el.querySelectorAll('.finder-filter-chip').forEach(function(chip) {
+  el.querySelectorAll('.finder-filter-chip').forEach(chip => {
     chip.addEventListener('click', function() {
       this.classList.toggle('active');
-      var active = Array.from(el.querySelectorAll('.finder-filter-chip.active'))
-                       .map(function(c) { return c.dataset.cls; });
-      el.querySelectorAll('.finder-result-row').forEach(function(row) {
+      const active = Array.from(el.querySelectorAll('.finder-filter-chip.active'))
+                         .map(c => c.dataset.cls);
+      el.querySelectorAll('.finder-result-row').forEach(row => {
         row.style.display = active.includes(row.dataset.cls) ? '' : 'none';
       });
     });
   });
 
   // Copy dates
-  el.querySelector('.finder-copy-btn').addEventListener('click', function() {
-    var visible = Array.from(el.querySelectorAll('.finder-result-row'))
-      .filter(function(r) { return r.style.display !== 'none'; });
-    var text = visible.map(function(row) {
-      return new Date(parseInt(row.dataset.ts))
-        .toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-    }).join('\n');
+  el.querySelector('.finder-copy-btn').addEventListener('click', () => {
+    const visible = Array.from(el.querySelectorAll('.finder-result-row'))
+      .filter(r => r.style.display !== 'none');
+    const text = visible.map(row =>
+      new Date(parseInt(row.dataset.ts))
+        .toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+    ).join('\n');
     navigator.clipboard.writeText(text)
-      .then(function()  { showToast('Dates copied (' + visible.length + ')', 'success'); })
-      .catch(function() { showToast('Clipboard access denied.', 'warning'); });
+      .then(() => { showToast('Dates copied (' + visible.length + ')', 'success'); })
+      .catch(() => { showToast('Clipboard access denied.', 'warning'); });
   });
 
   // Export .ics
-  el.querySelector('.finder-ics-btn').addEventListener('click', function() {
-    var visible = Array.from(el.querySelectorAll('.finder-result-row'))
-      .filter(function(r) { return r.style.display !== 'none'; });
-    var visibleResults = visible.map(function(row) {
-      var ts = parseInt(row.dataset.ts);
-      return results.find(function(r) { return r.date.getTime() === ts; });
+  el.querySelector('.finder-ics-btn').addEventListener('click', () => {
+    const visible = Array.from(el.querySelectorAll('.finder-result-row'))
+      .filter(r => r.style.display !== 'none');
+    const visibleResults = visible.map(row => {
+      const ts = parseInt(row.dataset.ts);
+      return results.find(r => r.date.getTime() === ts);
     }).filter(Boolean);
     _exportFinderICS(visibleResults);
   });
@@ -315,8 +316,8 @@ function renderFinderResults(results) {
 
 // ─── Sun/Moon pin label ────────────────────────────────────────────────────────
 function updateFinderSourceLabel() {
-  var label    = document.getElementById('finder-source-label');
-  var clearBtn = document.getElementById('finder-clear-source-btn');
+  const label    = document.getElementById('finder-source-label');
+  const clearBtn = document.getElementById('finder-clear-source-btn');
   if (!label) return;
   if (state.finderSourceLat !== null) {
     label.textContent = state.finderSourceLat.toFixed(5) + ', ' + state.finderSourceLon.toFixed(5);
@@ -340,9 +341,9 @@ function updateFinderSourceLabel() {
 //   tgt + cam      -> classic: az = bearing(Camera->Target), dist = Camera->Target
 //   none           -> manual azimuth entry
 function _finderParams() {
-  var sm  = state.finderSourceLat !== null;
-  var tgt = state.targetLat !== null;
-  var cam = state.currentLat !== null;
+  const sm  = state.finderSourceLat !== null;
+  const tgt = state.targetLat !== null;
+  const cam = state.currentLat !== null;
 
   if (sm && tgt && cam) {
     return {
@@ -370,34 +371,34 @@ function _finderParams() {
 
 // ─── Run search ────────────────────────────────────────────────────────────────
 function runFinderSearch() {
-  var p = _finderParams();
+  const p = _finderParams();
   if (p.lat === null) { showToast('Set a location on the map first.', 'warning'); return; }
 
-  var body        = document.querySelector('input[name="finder-body"]:checked').value;
-  var startVal    = document.getElementById('finder-start-date').value;
-  var endVal      = document.getElementById('finder-end-date').value;
-  var targetAz    = parseFloat(document.getElementById('finder-azimuth').value);
-  var azTol       = parseFloat(document.getElementById('finder-az-tol').value)   || 2;
-  var targetAltDeg = parseFloat(document.getElementById('finder-target-alt').value) || 0;
-  var altTolDeg    = parseFloat(document.getElementById('finder-alt-tol').value)   || 1;
-  var stepMin     = parseInt(document.getElementById('finder-step').value)        || 10;
-  var minAltDeg   = parseFloat(document.getElementById('finder-min-alt').value)  || 0;
+  const body        = document.querySelector('input[name="finder-body"]:checked').value;
+  const startVal    = document.getElementById('finder-start-date').value;
+  const endVal      = document.getElementById('finder-end-date').value;
+  const targetAz    = parseFloat(document.getElementById('finder-azimuth').value);
+  const azTol       = parseFloat(document.getElementById('finder-az-tol').value)   || 2;
+  const targetAltDeg = parseFloat(document.getElementById('finder-target-alt').value) || 0;
+  const altTolDeg    = parseFloat(document.getElementById('finder-alt-tol').value)   || 1;
+  const stepMin     = parseInt(document.getElementById('finder-step').value)        || 10;
+  const minAltDeg   = parseFloat(document.getElementById('finder-min-alt').value)  || 0;
 
   if (!startVal || !endVal || isNaN(targetAz)) {
     showToast('Fill in all search fields.', 'warning'); return;
   }
-  var startDate = new Date(startVal + 'T00:00:00');
-  var endDate   = new Date(endVal   + 'T23:59:59');
+  const startDate = new Date(startVal + 'T00:00:00');
+  const endDate   = new Date(endVal   + 'T23:59:59');
   if (endDate <= startDate) { showToast('End date must be after start date.', 'warning'); return; }
   if ((endDate - startDate) / 86400000 > 732) { showToast('Maximum search window is 2 years.', 'warning'); return; }
   if (azTol <= 0 || azTol > 10) { showToast('Azimuth tolerance must be 0–10°.', 'warning'); return; }
 
-  var el = document.getElementById('finder-results');
+  const el = document.getElementById('finder-results');
   el.innerHTML = '<div class="text-secondary small p-3 text-center">🔍 Searching…</div>';
 
-  setTimeout(function() {
-    var t0 = Date.now();
-    var results = searchAlignments({
+  setTimeout(() => {
+    const t0 = Date.now();
+    const results = searchAlignments({
       startDate: startDate, endDate: endDate,
       targetAz: targetAz, azTol: azTol,
       targetAltDeg: targetAltDeg, altTolDeg: altTolDeg,
@@ -416,27 +417,27 @@ function openFinderModal() {
   document.body.classList.add('modal-open');
   updateFinderSourceLabel();
 
-  var p = _finderParams();
+  const p = _finderParams();
   if (p.az !== null) {
     document.getElementById('finder-azimuth').value = p.az.toFixed(1);
-    var distStr = p.dist < 1 ? (p.dist * 1000).toFixed(0) + ' m' : p.dist.toFixed(2) + ' km';
-    var sm = state.finderSourceLat !== null, tgt = state.targetLat !== null;
+    const distStr = p.dist < 1 ? (p.dist * 1000).toFixed(0) + ' m' : p.dist.toFixed(2) + ' km';
+    const sm = state.finderSourceLat !== null, tgt = state.targetLat !== null;
     document.getElementById('finder-dist-label').textContent =
       sm && tgt ? '📏 Photographer -> Subject: '  + distStr :
       sm        ? '📏 Camera -> Sun/Moon pin: '   + distStr :
                   '📏 Camera -> Target: '          + distStr;
 
-    var body = document.querySelector('input[name="finder-body"]:checked');
+    const body = document.querySelector('input[name="finder-body"]:checked');
     document.getElementById('finder-moonsize-label').textContent =
       (!body || body.value === 'moon')
         ? '🌕 Apparent moon diameter: ~' + moonApparentSizeM(p.dist).toFixed(1) + ' m' : '';
 
     // Sync height field from current alt value
-    var altVal = parseFloat(document.getElementById('finder-target-alt').value);
+    const altVal = parseFloat(document.getElementById('finder-target-alt').value);
     if (!isNaN(altVal) && p.dist > 0) {
       document.getElementById('finder-height-m').value = (p.dist * 1000 * Math.tan(altVal * Math.PI / 180)).toFixed(0);
     }
-    var distStr2 = p.dist < 1 ? (p.dist * 1000).toFixed(0) + ' m' : p.dist.toFixed(3) + ' km';
+    const distStr2 = p.dist < 1 ? (p.dist * 1000).toFixed(0) + ' m' : p.dist.toFixed(3) + ' km';
     document.getElementById('finder-height-dist-note').textContent = '(at ' + distStr2 + ')';
 
     _drawFinderBearingLine(p.lat, p.lon, p.az);
@@ -446,8 +447,8 @@ function openFinderModal() {
     document.getElementById('finder-height-dist-note').textContent = '(set pins for distance)';
   }
 
-  var today  = new Date().toISOString().split('T')[0];
-  var nextYr = new Date(); nextYr.setFullYear(nextYr.getFullYear() + 1);
+  const today  = new Date().toISOString().split('T')[0];
+  const nextYr = new Date(); nextYr.setFullYear(nextYr.getFullYear() + 1);
   if (!document.getElementById('finder-start-date').value)
     document.getElementById('finder-start-date').value = today;
   if (!document.getElementById('finder-end-date').value)
@@ -458,7 +459,7 @@ function openFinderModal() {
 function initFinderModal() {
   document.getElementById('finder-open-btn').addEventListener('click', openFinderModal);
 
-  document.getElementById('finder-close-btn').addEventListener('click', function() {
+  document.getElementById('finder-close-btn').addEventListener('click', () => {
     document.getElementById('finder-modal').style.display = 'none';
     document.body.classList.remove('modal-open');
     _clearFinderBearingLine();
@@ -468,16 +469,16 @@ function initFinderModal() {
 
   // Two-way conversion: Alt (°) ↔ Apparent Height (m) using pin-to-pin distance
   document.getElementById('finder-target-alt').addEventListener('input', function() {
-    var alt = parseFloat(this.value);
-    var p   = _finderParams();
+    const alt = parseFloat(this.value);
+    const p   = _finderParams();
     if (!isNaN(alt) && p.dist > 0) {
       document.getElementById('finder-height-m').value = (p.dist * 1000 * Math.tan(alt * Math.PI / 180)).toFixed(0);
     }
   });
 
   document.getElementById('finder-height-m').addEventListener('input', function() {
-    var h = parseFloat(this.value);
-    var p = _finderParams();
+    const h = parseFloat(this.value);
+    const p = _finderParams();
     if (!isNaN(h) && h >= 0 && p.dist > 0) {
       document.getElementById('finder-target-alt').value = (Math.atan(h / (p.dist * 1000)) * 180 / Math.PI).toFixed(2);
     }
@@ -487,23 +488,23 @@ function initFinderModal() {
     if (e.target === this) { this.style.display = 'none'; _clearFinderBearingLine(); }
   });
 
-  document.querySelectorAll('input[name="finder-body"]').forEach(function(radio) {
+  document.querySelectorAll('input[name="finder-body"]').forEach(radio => {
     radio.addEventListener('change', function() {
-      var p = _finderParams();
+      const p = _finderParams();
       document.getElementById('finder-moonsize-label').textContent =
         (this.value !== 'sun' && p.az !== null)
           ? '🌕 Apparent moon diameter: ~' + moonApparentSizeM(p.dist).toFixed(1) + ' m' : '';
     });
   });
 
-  document.getElementById('finder-pin-source-btn').addEventListener('click', function() {
+  document.getElementById('finder-pin-source-btn').addEventListener('click', () => {
     document.getElementById('finder-modal').style.display = 'none';
     state.finderSourceMode = true;
     if (typeof _switchToSatellite === 'function') _switchToSatellite();
     showToast('🌕☀️ Click the map where sun/moon should appear', 'info');
   });
 
-  document.getElementById('finder-clear-source-btn').addEventListener('click', function() {
+  document.getElementById('finder-clear-source-btn').addEventListener('click', () => {
     state.finderSourceLat = null;
     state.finderSourceLon = null;
     if (state.finderSourceGroup) state.finderSourceGroup.clearLayers();

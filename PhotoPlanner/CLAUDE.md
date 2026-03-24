@@ -7,11 +7,14 @@ Always show a summary of what will be committed and wait for the user to say "ye
 
 ## Project Structure
 
-- `app.js` — main app entry point
-- `js/` — feature modules (calculators, celestial, compass, target)
+- `js/main.js` — build entry point (initMap, tab nav, dayjs plugin init)
+- `js/state.js` — global shared state object
+- `js/utils.js` — shared helpers (fmtTime, showToast, getAdaptiveArcR, …)
+- `js/` — feature modules (calculators, celestial, compass, target, ar, …)
 - `templates/` — HTML template source files (edit these, not `js/templates/`)
 - `index.html` — app shell
 - `manifest.json` — PWA manifest
+- `app.js` — **legacy, not in build** (see module map inside for details)
 
 ## Coding Standards
 
