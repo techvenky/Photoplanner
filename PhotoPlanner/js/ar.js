@@ -57,7 +57,7 @@ function _updateARTimeLabel() {
 // ─── Open / Close ─────────────────────────────────────────────────────────────
 async function openARView() {
   // Camera and orientation APIs require a secure context
-  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     showToast('AR requires HTTPS. Open the app over a secure connection.', 'danger');
     return;
   }
@@ -191,12 +191,23 @@ function _onOrientationAbsolute(e) {
     // High counts (>20 ≈ 2 s at 10 Hz) mean Chrome's Motion Sensor
     // site permission is blocked rather than just uncalibrated.
     AR.absNullCount++;
+    // If the compass was previously working but now consistently returns null
+    // (e.g. sensor temporarily lost lock), fall back to relative orientation
+    // so rotation tracking continues rather than freezing.
+    if (AR.useAbsolute && AR.absNullCount > 30) {
+      AR.useAbsolute = false;
+      AR.useRelative = true;
+    }
   }
   _processOrientation(e, true);
 }
 
 function _onOrientation(e) {
-  if (AR.useAbsolute) return;  // prefer absolute when available
+  // Skip relative events once deviceorientationabsolute is the heading source.
+  // But still process deviceorientation events that carry an absolute bearing
+  // (e.absolute===true), as Samsung/Chrome Android deliver heading this way
+  // and the first event would set AR.useAbsolute=true, blocking every subsequent one.
+  if (AR.useAbsolute && e.absolute !== true) return;
 
   // iOS: webkitCompassHeading is always north-referenced — use it directly.
   if (e.webkitCompassHeading != null) {
@@ -353,23 +364,20 @@ function _startOrientation() {
   }, 2000);
 
   // After 3 s with no heading, auto-enable REL mode so AR is usable without
-  // a geographic compass.  The HTML overlay is hidden by _drawFrame once heading
-  // is set; if still null after 3 s we force-set heading=0 (REL) so rendering starts.
+  // a geographic compass.  Always engage so the canvas renders — the user can
+  // still see celestial objects at heading=0 and rotate using DevTools Sensors
+  // or device sensors (once permission is granted).
   AR.compassTimer = setTimeout(() => {
     AR.compassTimer = null;
     if (AR.heading === null && !AR.useAbsolute) {
       AR.useRelative = true;
-      // Only auto-set REL if sensors are firing (so we at least have tilt data).
-      // If absEventSeen is false, sensors may be fully absent — keep overlay visible.
-      if (AR.absEventSeen || AR.absNullCount > 0) {
-        AR.heading = 0;
-        AR.smoothHeading = 0;
-        _hideCompassOverlay();
-        showToast(
-          'No absolute compass — using device orientation (REL). Objects shown relative to opening direction.',
-          'warning'
-        );
-      }
+      AR.heading = 0;
+      AR.smoothHeading = 0;
+      _hideCompassOverlay();
+      const msg = AR.absNullCount > 20
+        ? 'Compass blocked — enable Motion Sensors in Chrome site settings (REL mode active).'
+        : 'No compass signal — AR running in REL mode. Point phone at a known direction to orient.';
+      showToast(msg, 'warning');
     }
   }, 3000);
 }

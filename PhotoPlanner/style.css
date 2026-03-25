@@ -1884,6 +1884,35 @@ input[type="range"],
   user-select: none;
 }
 
+/* 5a. Small phone screens (≤480px): wrap AR bottom controls to two rows so the
+       FOV slider is not pushed off-screen by the 7 layer-toggle buttons */
+@media (max-width: 480px) {
+  .ar-hud-bottom-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+  }
+  .ar-layers {
+    justify-content: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .ar-layer-btn {
+    width: 36px;
+    height: 30px;
+    font-size: 0.85rem;
+  }
+  .ar-right-controls {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .ar-fov-slider {
+    width: 90px;
+  }
+}
+
 /* 5. :active fallback for touch devices (replaces :hover which doesn't fire on touch) */
 .nav-tab:active                     { background: #21262d; color: #e6edf3; }
 .btn:active:not(:disabled)          { opacity: 0.75; }
@@ -1900,6 +1929,11 @@ input[type="range"],
   }
   input[type="range"] {
     min-height: 28px; /* larger hit-area without changing visual track */
+  }
+  /* Constrain date input so the time slider always has space */
+  .ar-date-input {
+    max-width: 100px;
+    flex-basis: 90px;
   }
   /* Prevent iOS from zooming on input focus — 16px is the magic threshold */
   input[type="text"],

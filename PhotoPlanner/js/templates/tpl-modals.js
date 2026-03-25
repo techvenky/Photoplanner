@@ -97,6 +97,7 @@ document.getElementById('modals-root').innerHTML = `
     <div class="ar-hud-top">
       <div class="ar-title">Augmented Reality</div>
       <div id="ar-status" class="ar-status">—</div>
+      <button id="ar-capture-btn" class="btn btn-sm btn-outline-light ar-capture" title="Save AR snapshot">📷</button>
       <button id="ar-close-btn" class="btn btn-sm btn-outline-secondary ar-close">✕ Done</button>
     </div>
 
@@ -133,6 +134,7 @@ document.getElementById('modals-root').innerHTML = `
         <button class="ar-layer-btn active" data-layer="planets" title="Planets">🪐</button>
         <button class="ar-layer-btn active" data-layer="path"    title="Paths">〰</button>
         <button class="ar-layer-btn active" data-layer="grid"    title="Alt grid">⊞</button>
+        <button class="ar-layer-btn active" data-layer="target"  title="Target location">🎯</button>
       </div>
       <div class="ar-right-controls">
         <label class="ar-fov-label-txt">FOV
