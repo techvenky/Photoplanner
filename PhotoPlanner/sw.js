@@ -1,7 +1,7 @@
 // ─── PhotoPlanner Service Worker ─────────────────────────────────────────────
 // Cache-first for app shell, network-first for map tiles.
 
-const CACHE_NAME = 'photoplanner-ed0ba00a';
+const CACHE_NAME = 'photoplanner-ac5d3ecc';
 
 // App shell: everything needed to run offline
 const APP_SHELL = [

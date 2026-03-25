@@ -203,21 +203,17 @@ function _onOrientationAbsolute(e) {
 }
 
 function _onOrientation(e) {
-  // Skip relative events once deviceorientationabsolute is the heading source.
-  // But still process deviceorientation events that carry an absolute bearing
-  // (e.absolute===true), as Samsung/Chrome Android deliver heading this way
-  // and the first event would set AR.useAbsolute=true, blocking every subsequent one.
-  if (AR.useAbsolute && e.absolute !== true) return;
-
   // iOS: webkitCompassHeading is always north-referenced — use it directly.
   if (e.webkitCompassHeading != null) {
     _processOrientation(e, false);
     return;
   }
 
-  // Some Samsung/Android browsers dispatch absolute orientation through the regular
-  // deviceorientation event with e.absolute === true instead of the dedicated
-  // deviceorientationabsolute event. Treat these as absolute compass readings.
+  // Absolute bearing delivered via deviceorientation (Samsung, many Chrome Android builds
+  // use this instead of the dedicated deviceorientationabsolute event).
+  // IMPORTANT: every such event must be processed individually — do NOT gate on
+  // AR.useAbsolute here, because setting it on the first event would cause the
+  // old early-return logic to block every subsequent one, freezing the heading.
   if (e.absolute === true && e.alpha != null) {
     AR.absEventSeen = true;
     AR.useAbsolute = true;
@@ -225,10 +221,10 @@ function _onOrientation(e) {
     return;
   }
 
-  // Android browsers that never fire deviceorientationabsolute (Firefox, older Samsung
-  // Internet): after the 4-second grace period, use relative alpha as a best-effort
-  // compass. The user sees a warning toast before this engages.
-  if (AR.useRelative && e.alpha != null) {
+  // Relative orientation: only fall through here when deviceorientationabsolute is NOT
+  // providing valid data (AR.useAbsolute stays false until absolute data arrives), so
+  // there is no double-processing risk with the dedicated absolute listener.
+  if (!AR.useAbsolute && AR.useRelative && e.alpha != null) {
     _processOrientation(e, true);
   }
 }
